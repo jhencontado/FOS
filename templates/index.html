@@ -3,10 +3,43 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Online Food Ordering System</title>
+    <title>Library Management - Login</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <h1>Welcome to Our Online Food Ordering System</h1>
-    <a href="{{ url_for('show_menu') }}">View Menu</a>
+    <div class="login-container">
+        <!-- Left Section -->
+        <div class="left-section">
+            <div class="overlay">
+
+                <h2>Libraries are the heart of the community,<br>
+                    a place where people come together<br>
+                        to learn, share, and grow.</h2>
+
+
+
+
+        <!-- Right Section (Login Form) -->
+        <div class="right-section">
+            <div class="login-box">
+                <h3 class="logo">
+                    <img src="{{ url_for('static', filename='image/logo.jpg') }}" width="150" alt="Logo"></h3>
+                <h4>Log Into Your Account</h4>
+                <form action="/login" method="POST">
+                    <label>Username</label>
+                    <input type="text" name="username" required placeholder="Enter username">
+                    <label>Password</label>
+                    <input type="password" name="password" required placeholder="Enter password">
+                    <button type="submit">Sign In</button>
+
+                <h1>Don't have an account?</h1>
+                    <a href="/register">Register here</a>
+                </form>
+                </div>
+            </div>
+        </div>
+            </div>
+    </div>
+</div>
 </body>
 </html>
