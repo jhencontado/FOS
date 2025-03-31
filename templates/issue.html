@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Issue Books</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 600px; margin: auto; padding: 20px; border: 1px solid #ddd; border-radius: 5px; background-color: #f9f9f9; }
+        .form-group { margin-bottom: 15px; }
+        label { font-weight: bold; display: block; }
+        input, select { width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ccc; border-radius: 5px; }
+        .btn { padding: 10px 15px; cursor: pointer; border: none; border-radius: 5px; }
+        .btn-lend { background-color: #28a745; color: white; }
+        .btn-remove { background-color: #dc3545; color: white; }
+        .btn-checkout { background-color: #007bff; color: white; width: 100%; }
+        table { width: 100%; margin-top: 10px; border-collapse: collapse; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        #receipt { margin-top: 20px; padding: 10px; border: 1px solid #ddd; background-color: #fff; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+{% include "sidebar.html" %}
+<div class="container">
+    <h2>Issue Books</h2>
+
+    <!-- Search Reader -->
+    <div class="form-group">
+        <label for="reader-search">Search Reader (ID or Name):</label>
+        <input type="text" id="reader-search" placeholder="Enter reader ID or name">
+        <select id="reader-list">
+            <option value="">Select Reader</option>
+        </select>
+    </div>
+
+    <!-- Reader Details -->
+    <div class="form-group">
+        <label for="reader-name">Name:</label>
+        <input type="text" id="reader-name" readonly>
+    </div>
+    <div class="form-group">
+        <label for="reader-email">Email:</label>
+        <input type="email" id="reader-email" readonly>
+    </div>
+    <div class="form-group">
+        <label for="reader-contact">Contact Number:</label>
+        <input type="text" id="reader-contact" readonly>
+    </div>
+
+    <!-- Date Selection -->
+    <div class="form-group">
+        <label for="start-date">Start Date:</label>
+        <input type="date" id="start-date">
+    </div>
+    <div class="form-group">
+        <label for="return-date">Return Date:</label>
+        <input type="date" id="return-date">
+    </div>
+
+    <!-- Available Books -->
+    <h3>Available Books</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Book Title</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody id="book-list"></tbody>
+    </table>
+
+    <!-- Selected Books -->
+    <h3>Selected Books</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Book Title</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody id="selected-books"></tbody>
+    </table>
+
+    <button class="btn btn-checkout" id="checkout-btn">Checkout</button>
+</div>
+
+<script>
+$(document).ready(function () {
+    let selectedBooks = [];
+
+    // Search Reader
+    $('#reader-search').on('input', function () {
+        let query = $(this).val().trim();
+
+        if (query.length > 1) {
+            $.get('/search_reader', { query: query }, function (data) {
+                let readerList = $('#reader-list');
+                readerList.empty().append('<option value="">Select Reader</option>');
+
+                if (data.length === 0) {
+                    alert("No readers found.");
+                }
+
+                data.forEach(reader => {
+                    readerList.append(`
+                        <option value="${reader[0]}"
+                                data-name="${reader[1]}"
+                                data-email="${reader[2]}"
+                                data-contact="${reader[3]}"
+                                data-status="${reader[4]}">
+                            ${reader[1]} (ID: ${reader[0]})
+                        </option>
+                    `);
+                });
+            }).fail(function () {
+                alert("Error fetching reader data. Please try again.");
+            });
+        }
+    });
+
+
+    // Populate Reader Details
+    $('#reader-list').change(function () {
+        let selected = $(this).find(':selected');
+        let readerStatus = selected.data('status') || 'active';
+
+        $('#reader-name').val(selected.data('name') || '');
+        $('#reader-email').val(selected.data('email') || '');
+        $('#reader-contact').val(selected.data('contact') || '');
+
+        if (readerStatus === 'inactive') {
+            alert('⚠️ This reader is inactive and cannot issue more books.');
+            $('#checkout-btn').prop('disabled', true);
+        } else {
+            $('#checkout-btn').prop('disabled', false);
+        }
+    });
+
+
+    // Fetch Books
+    function loadBooks() {
+        $.get('/fetch_books', function (data) {
+            let bookList = $('#book-list');
+            bookList.empty();
+            data.forEach(book => {
+                bookList.append(`
+                    <tr>
+                        <td>${book[1]}</td>
+                        <td>
+                            <button class="btn btn-lend" data-id="${book[0]}" data-title="${book[1]}">Lend</button>
+                        </td>
+                    </tr>
+                `);
+            });
+        }).fail(function () {
+            alert("Error fetching books. Please try again.");
+        });
+    }
+    loadBooks();
+
+    // Lend Book
+    $(document).on('click', '.btn-lend', function () {
+        let bookId = $(this).data('id');
+        let bookTitle = $(this).data('title');
+
+        if (!selectedBooks.some(book => book.id === bookId)) {
+            selectedBooks.push({ id: bookId, title: bookTitle });
+            $('#selected-books').append(`
+                <tr data-id="${bookId}">
+                    <td>${bookTitle}</td>
+                    <td>
+                        <button class="btn btn-remove" data-id="${bookId}">Remove</button>
+                    </td>
+                </tr>
+            `);
+        }
+    });
+
+    // Remove Book
+    $(document).on('click', '.btn-remove', function () {
+        let bookId = $(this).data('id');
+        selectedBooks = selectedBooks.filter(book => book.id !== bookId);
+        $(`#selected-books tr[data-id="${bookId}"]`).remove();
+    });
+
+    // Checkout
+    $('#checkout-btn').click(function () {
+        $.ajax({
+            url: '/get_logged_in_admin',
+            type: 'GET',
+            success: function (adminResponse) {
+                if (!adminResponse.admin_id) {
+                    alert("Admin not logged in. Please log in again.");
+                    return;
+                }
+
+                let adminId = adminResponse.admin_id;
+                let adminName = adminResponse.admin_name;
+
+                // Proceed with checkout
+                processCheckout(adminId, adminName);
+            },
+            error: function () {
+                alert("Error fetching admin details. Please log in again.");
+                window.location.href = "/login";
+            }
+        });
+    });
+
+    function processCheckout(adminId, adminName) {
+        let readerId = $('#reader-list').val();
+        let startDate = $('#start-date').val();
+        let returnDate = $('#return-date').val();
+
+        if (!readerId || selectedBooks.length === 0 || !startDate || !returnDate) {
+            alert('Please complete all fields before checking out.');
+            return;
+        }
+
+        let bookIds = selectedBooks.map(book => book.id);
+
+        $.ajax({
+            url: '/issue_books',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                reader_id: readerId,
+                books: bookIds,
+                start_date: startDate,
+                return_date: returnDate,
+                admin_id: adminId
+            }),
+            success: function (response) {
+                let issuedNumbers = response.receipt.issued_numbers; // Get issued numbers
+
+                sessionStorage.setItem("receiptData", JSON.stringify({
+                    transaction_id: response.receipt.transaction_id,
+                    admin: { id: adminId, name: adminName },
+                    reader: response.receipt.reader,
+                    start_date: response.receipt.start_date,
+                    return_date: response.receipt.return_date,
+                    books: selectedBooks.map((book, index) => ({
+                        title: book.title,
+                        issued_number: issuedNumbers[index]  // Store issued number with title
+                    }))
+                }));
+
+                window.location.href = "/receipt";
+            }
+            error: function () {
+                alert("Error issuing books. Please try again.");
+            }
+        });
+    }
+
+
+
+    console.log("Script fully loaded.");
+});
+</script>
+
+</body>
+</html>

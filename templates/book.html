@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Books</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+     <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}"> <!-- Sidebar CSS -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+{% include "sidebar.html" %}
+    <div class="content">
+        <h1>Manage Books</h1>
+
+        <form id="searchForm">
+            <input type="text" id="searchQuery" name="search" placeholder="Search by title, author, or genre" value="{{ search_query }}">
+            <button type="submit">Search</button>
+        </form>
+
+        <table border="1">
+            <thead>
+                <tr>
+                    <th>Cover</th>
+                    <th>Title</th>
+                    <th>Author</th>
+                    <th>Genre</th>
+                    <th>Publisher</th>
+                    <th>Year</th>
+                    <th>ISBN</th>
+                    <th>Available</th>
+                </tr>
+            </thead>
+            <tbody id="bookTable">
+                {% if books %}
+                     {% for book in books %}
+                    <tr>
+                        <td>
+                            {% if book.image %}
+                                <img src="{{ url_for('static', filename='image/' + book.image) }}" alt="Book Cover" width="50">
+                            {% else %}
+                                <img src="{{ url_for('static', filename='image/default.jpg') }}" alt="No Image" width="50">
+                             {% endif %}
+                        </td>
+                        <td>{{ book.title }}</td>
+                        <td>{{ book.author }}</td>
+                        <td>{{ book.genre or 'N/A' }}</td>
+                        <td>{{ book.publisher }}</td>
+                        <td>{{ book.year_publish }}</td>
+                        <td>{{ book.ISBN }}</td>
+                        <td>{{ book.available_qnty }}</td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="8">No books available</td>
+                        </tr>
+                    {% endif %}
+            </tbody>
+
+        </table>
+    </div>
+
+    <script>
+    $(document).ready(function() {
+    $("#searchForm").submit(function(event) {
+        event.preventDefault();
+        var searchQuery = $("#searchQuery").val();
+
+        $.ajax({
+            url: "/books",
+            type: "GET",
+            data: { search: searchQuery },
+            dataType: "json",
+            headers: { "X-Requested-With": "XMLHttpRequest" },
+            success: function(response) {
+                var bookTable = $("#bookTable");
+                bookTable.empty(); // I-clear lang kapag may search
+
+                if (response.books.length > 0) {
+                    $(response.books).each(function(index, book) {
+                        var imagePath = book.image ? `/static/image/${book.image}` : `/static/image/default.jpg`;
+
+                        var row = `<tr>
+                            <td><img src="${imagePath}" alt="Book Cover" width="50"></td>
+                            <td>${book.title}</td>
+                            <td>${book.author}</td>
+                            <td>${book.genre || 'N/A'}</td>
+                            <td>${book.publisher}</td>
+                            <td>${book.year_publish}</td>
+                            <td>${book.ISBN}</td>
+                            <td>${book.available_qnty}</td>
+                        </tr>`;
+                        bookTable.append(row);
+                    });
+                } else {
+                    bookTable.append('<tr><td colspan="8">No books found</td></tr>');
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error("Error fetching books:", error);
+            }
+        });
+    });
+});
+
+</script>
+
+
+</body>
+</html>

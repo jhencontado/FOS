@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Readers</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+     <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+{% include "sidebar.html" %}
+    <div class="reader">
+        <h2>Manage Readers</h2>
+        <div class="reader-form">
+            <!-- 📄 Registration Form -->
+            <div class="form-container">
+                <h3>Register New Reader</h3>
+                <form action="/add_reader" method="POST">
+                    <label for="name">Full Name</label>
+                    <input type="text" name="name" id="name" required>
+
+                    <label for="contact_number">Contact Number</label>
+                    <input type="text" name="contact_number" id="contact_number" required>
+
+                    <label for="reference_id">Reference ID</label>
+                    <input type="text" name="reference_id" id="reference_id" required>
+
+                    <label for="address">Address</label>
+                    <input type="text" name="address" id="address" required>
+
+                    <label for="email">Email</label>
+                    <input type="email" name="email" id="email" required>
+
+                    <button type="submit">Register Reader</button>
+                </form>
+            </div>
+
+            <!-- 📚 Readers Table -->
+            <div class="table-container">
+                <h3>Registered Readers</h3>
+                <table border="1">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Contact</th>
+                            <th>Reference ID</th>
+                            <th>Address</th>
+                            <th>Email</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for reader in readers %}
+                        <tr>
+                            <td>{{ reader.reader_id }}</td>
+                            <td>{{ reader.name }}</td>
+                            <td>{{ reader.contact_number }}</td>
+                            <td>{{ reader.reference_id }}</td>
+                            <td>{{ reader.address }}</td>
+                            <td>{{ reader.email }}</td>
+                            <td>{{ reader.status }}</td>
+                            <td>
+                                <button class="edit-btn" onclick="editReader('{{ reader.reader_id }}', '{{ reader.name }}', '{{ reader.contact_number }}', '{{ reader.reference_id }}', '{{ reader.address }}', '{{ reader.email }}')">Edit</button>
+                                <button class="delete-btn" onclick="deleteReader('{{ reader.reader_id }}')">Delete</button>
+</td>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 📄 Edit Form (Hidden by Default) -->
+    <div id="editForm" class="edit-form-container">
+        <h3>Edit Reader</h3>
+        <form id="updateReaderForm" action="/update_reader" method="POST">
+            <input type="hidden" name="reader_id" id="edit_reader_id">
+
+            <label for="edit_name">Full Name</label>
+            <input type="text" name="name" id="edit_name" required>
+
+            <label for="edit_contact_number">Contact Number</label>
+            <input type="text" name="contact_number" id="edit_contact_number" required>
+
+            <label for="edit_reference_id">Reference ID</label>
+            <input type="text" name="reference_id" id="edit_reference_id" required>
+
+            <label for="edit_address">Address</label>
+            <input type="text" name="address" id="edit_address" required>
+
+            <label for="edit_email">Email</label>
+            <input type="email" name="email" id="edit_email" required>
+
+            <button type="submit">Save</button>
+            <button type="button" onclick="closeEditForm()">Cancel</button>
+
+        </form>
+    </div>
+
+    <script>
+        function editReader(id, name, contact, refId, address, email) {
+            document.getElementById("edit_reader_id").value = id;
+            document.getElementById("edit_name").value = name;
+            document.getElementById("edit_contact_number").value = contact;
+            document.getElementById("edit_reference_id").value = refId;
+            document.getElementById("edit_address").value = address;
+            document.getElementById("edit_email").value = email;
+
+            document.getElementById("editForm").style.display = "block";
+        }
+
+        function closeEditForm() {
+            document.getElementById("editForm").style.display = "none";
+        }
+
+        function deleteReader(readerId) {
+            if (confirm("Are you sure you want to delete this reader?")) {
+                fetch(`/delete_reader/${readerId}`, { method: 'POST' })
+                .then(response => {
+                    if (response.ok) {
+                        location.reload(); // Refresh page after deletion
+                    } else {
+                        alert("Failed to delete reader.");
+                    }
+                });
+            }
+        }
+
+        function deactivateReader() {
+            alert("Deactivation feature coming soon!");
+        }
+
+    </script>
+</body>
+</html>
