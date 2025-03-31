@@ -9,6 +9,7 @@ import MySQLdb.cursors
 import os
 
 
+
 app = Flask(__name__, static_folder='static')
 app.config['SECRET_KEY'] = os.urandom(24)
 # MySQL Configuration
