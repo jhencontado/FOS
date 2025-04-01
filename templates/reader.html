@@ -5,18 +5,263 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Manage Readers</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-     <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+     <style>
+        body {
+            display: flex;
+            margin: 0;
+            font-family: Arial, sans-serif;
+        }
+        /* Main content space */
+        .content {
+            margin-left: 250px;
+            width: calc(100% - 250px);
+            padding: 20px;
+        }
+
+        /* Button to open modal */
+        .btn-register {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            display: block;
+            margin: 0 auto 20px;
+            width: 200px;
+            text-align: center;
+        }
+
+        .btn-register:hover {
+            background-color: #45a049;
+        }
+
+        .reader {
+            text-align: center; /* Center the content */
+        }
+
+        /* Search Bar and Button */
+        .search-container {
+            display: flex;
+            justify-content: left;
+            margin-bottom: 20px;
+            align-items: center;
+
+        }
+
+        .search-container input[type="text"] {
+            padding: 10px;
+            font-size: 16px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            margin-right: 10px;
+            width: 250px;
+        }
+
+        .search-container button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .search-container button:hover {
+            background-color: #45a049;
+        }
+
+        .btn-register {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            display: block;
+            margin: 0 auto 20px;
+            width: 200px;
+            text-align: center;
+            justify-content: left;
+        }
+
+        .btn-register:hover {
+            background-color: #45a049;
+        }
+
+        /* Table Container */
+        .table-container {
+            width: 80%;
+            margin: 0 auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            text-align: center;
+        }
+
+        table th, table td {
+            padding: 12px;
+            text-align: left;
+            border: 1px solid #ddd;
+        }
+
+        table th {
+            background-color: #f4f4f4;
+        }
+
+        /* Modal Styles */
+        .modal {
+            display: none;  /* Hidden by default */
+            position: fixed;
+            z-index: 1;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgb(0, 0, 0); /* Black background */
+            background-color: rgba(0, 0, 0, 0.4); /* Black with transparency */
+            padding-top: 60px;
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 5% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 500px;
+        }
+
+        .modal-content input {
+            width: 100%;
+            padding: 10px;
+            margin: 8px 0;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
+
+        .modal-content button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px;
+            width: 100%;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .modal-content button:hover {
+            background-color: #45a049;
+        }
+
+        .close {
+            cursor: pointer;
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+
+        .close:hover,
+        .close:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+    </style>
 </head>
 <body>
 {% include "sidebar.html" %}
-    <div class="reader">
-        <h2>Manage Readers</h2>
-        <div class="reader-form">
-            <!-- 📄 Registration Form -->
-            <div class="form-container">
+    <div class="content">
+        <div class="reader">
+            <!-- Search Bar with Icon -->
+            <div class="search-container">
+                <input type="text" id="searchQuery" placeholder="Search by name, contact, or reference" onkeyup="searchReader()">
+                <button onclick="searchReader()"><i class="fas fa-search"></i> Search</button>
+            </div>
+
+            <!-- Button to Open Register Reader Modal -->
+            <button id="registerReaderBtn" onclick="openRegisterModal()">Register Reader</button>
+
+            <!-- Table of Readers -->
+            <div class="table-container">
+                <h3>Registered Readers</h3>
+                <table id="readersTable" border="1">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Contact</th>
+                            <th>Reference ID</th>
+                            <th>Address</th>
+                            <th>Email</th>
+                            <th>Status</th>
+                            <th>Lent Books</th> <!-- New column for lent books -->
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="readerTableBody">
+                        {% for reader in readers %}
+                        <tr>
+                            <td>{{ reader.reader_id }}</td>
+                            <td>{{ reader.name }}</td>
+                            <td>{{ reader.contact_number }}</td>
+                            <td>{{ reader.reference_id }}</td>
+                            <td>{{ reader.address }}</td>
+                            <td>{{ reader.email }}</td>
+                            <td>{{ reader.lend_book }}</td> <!-- Display lent books count -->
+                            <td>{{ reader.status }}</td>
+                            <td>
+                                <button class="action-btn edit-btn" onclick="editReader('{{ reader.reader_id }}', '{{ reader.name }}', '{{ reader.contact_number }}', '{{ reader.reference_id }}', '{{ reader.address }}', '{{ reader.email }}')"><i class="fas fa-edit"></i></button>
+                                <button class="action-btn delete-btn" onclick="deleteReader('{{ reader.reader_id }}')"><i class="fas fa-trash-alt"></i></button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <!-- Edit Modal (Hidden by Default) -->
+        <div id="editModal" class="modal">
+            <div class="modal-content">
+                <span class="close" onclick="closeEditModal()">&times;</span>
+                <h3>Edit Reader</h3>
+                <form id="editReaderForm">
+                    <input type="hidden" id="editReaderId" name="reader_id">
+                    <label for="editName">Full Name</label>
+                    <input type="text" id="editName" name="name" required>
+
+                    <label for="editContactNumber">Contact Number</label>
+                    <input type="text" id="editContactNumber" name="contact_number" required>
+
+                    <label for="editReferenceId">Reference ID</label>
+                    <input type="text" id="editReferenceId" name="reference_id" required>
+
+                    <label for="editAddress">Address</label>
+                    <input type="text" id="editAddress" name="address" required>
+
+                    <label for="editEmail">Email</label>
+                    <input type="email" id="editEmail" name="email" required>
+
+
+                    <button type="submit">Save</button>
+                    <button type="button" onclick="closeEditModal()">Cancel</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Register New Reader Modal -->
+        <div id="registerReaderModal" class="modal">
+            <div class="modal-content">
+                <span class="close" onclick="closeModal()">&times;</span>
                 <h3>Register New Reader</h3>
-                <form action="/add_reader" method="POST">
+                <form id="registerReaderForm" action="/add_reader" method="POST">
                     <label for="name">Full Name</label>
                     <input type="text" name="name" id="name" required>
 
@@ -33,91 +278,100 @@
                     <input type="email" name="email" id="email" required>
 
                     <button type="submit">Register Reader</button>
+                    <button type="button" onclick="closeModal()">Cancel</button>
                 </form>
-            </div>
-
-            <!-- 📚 Readers Table -->
-            <div class="table-container">
-                <h3>Registered Readers</h3>
-                <table border="1">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Name</th>
-                            <th>Contact</th>
-                            <th>Reference ID</th>
-                            <th>Address</th>
-                            <th>Email</th>
-                            <th>Status</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for reader in readers %}
-                        <tr>
-                            <td>{{ reader.reader_id }}</td>
-                            <td>{{ reader.name }}</td>
-                            <td>{{ reader.contact_number }}</td>
-                            <td>{{ reader.reference_id }}</td>
-                            <td>{{ reader.address }}</td>
-                            <td>{{ reader.email }}</td>
-                            <td>{{ reader.status }}</td>
-                            <td>
-                                <button class="edit-btn" onclick="editReader('{{ reader.reader_id }}', '{{ reader.name }}', '{{ reader.contact_number }}', '{{ reader.reference_id }}', '{{ reader.address }}', '{{ reader.email }}')">Edit</button>
-                                <button class="delete-btn" onclick="deleteReader('{{ reader.reader_id }}')">Delete</button>
-</td>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
             </div>
         </div>
     </div>
 
-    <!-- 📄 Edit Form (Hidden by Default) -->
-    <div id="editForm" class="edit-form-container">
-        <h3>Edit Reader</h3>
-        <form id="updateReaderForm" action="/update_reader" method="POST">
-            <input type="hidden" name="reader_id" id="edit_reader_id">
-
-            <label for="edit_name">Full Name</label>
-            <input type="text" name="name" id="edit_name" required>
-
-            <label for="edit_contact_number">Contact Number</label>
-            <input type="text" name="contact_number" id="edit_contact_number" required>
-
-            <label for="edit_reference_id">Reference ID</label>
-            <input type="text" name="reference_id" id="edit_reference_id" required>
-
-            <label for="edit_address">Address</label>
-            <input type="text" name="address" id="edit_address" required>
-
-            <label for="edit_email">Email</label>
-            <input type="email" name="email" id="edit_email" required>
-
-            <button type="submit">Save</button>
-            <button type="button" onclick="closeEditForm()">Cancel</button>
-
-        </form>
-    </div>
-
     <script>
+        // Show Edit Modal with Data
         function editReader(id, name, contact, refId, address, email) {
-            document.getElementById("edit_reader_id").value = id;
-            document.getElementById("edit_name").value = name;
-            document.getElementById("edit_contact_number").value = contact;
-            document.getElementById("edit_reference_id").value = refId;
-            document.getElementById("edit_address").value = address;
-            document.getElementById("edit_email").value = email;
+            console.log(id, name, contact, refId, address, email);  // Log to verify data
 
-            document.getElementById("editForm").style.display = "block";
+            document.getElementById("editReaderId").value = id;
+            document.getElementById("editName").value = name;
+            document.getElementById("editContactNumber").value = contact;
+            document.getElementById("editReferenceId").value = refId;
+            document.getElementById("editAddress").value = address;
+            document.getElementById("editEmail").value = email;
+
+            const modal = document.getElementById("editModal");
+            modal.style.display = "block";  // Open the modal
+
+            if (modal.style.display === "block") {
+                console.log("Edit Modal is now visible.");
+            } else {
+                console.log("Edit Modal failed to open.");
+            }
         }
 
-        function closeEditForm() {
-            document.getElementById("editForm").style.display = "none";
+        document.getElementById("editReaderForm").addEventListener("submit", function(event) {
+            event.preventDefault();  // Prevent default form submission
+
+            var formData = new FormData(this);
+
+            fetch("/update_reader", {
+                method: "POST",
+                body: formData,
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.message) {
+                    alert(data.message);
+                    location.reload();  // Reload to show updated data
+                } else {
+                    alert("Error: " + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error updating reader:', error);
+            });
+        });
+
+        // Close Edit Modal
+        function closeEditModal() {
+            document.getElementById("editModal").style.display = "none";
         }
 
+        /// Open Register Reader Modal
+        function openRegisterModal() {
+            document.getElementById("registerReaderModal").style.display = "block";
+        }
+
+        // Close Register Reader Modal
+        function closeRegisterModal() {
+            document.getElementById("registerReaderModal").style.display = "none";
+        }
+
+        // Handle form submission via AJAX to prevent page reload
+        document.getElementById("registerReaderForm").addEventListener("submit", function(event) {
+            event.preventDefault();  // Prevent the form from submitting the default way
+
+            var formData = new FormData(this);
+
+            fetch("/add_reader", {
+                method: "POST",
+                body: formData,
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.message) {
+                    alert(data.message);
+                    closeRegisterModal();  // Close the modal after successful submission
+                    location.reload();  // Refresh the page to show new reader
+                } else {
+                    alert("Error: " + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error registering reader:', error);
+            });
+        });
+
+
+
+        // Delete Reader
         function deleteReader(readerId) {
             if (confirm("Are you sure you want to delete this reader?")) {
                 fetch(`/delete_reader/${readerId}`, { method: 'POST' })
@@ -131,8 +385,22 @@
             }
         }
 
-        function deactivateReader() {
-            alert("Deactivation feature coming soon!");
+        // Handle Search
+        function searchReader() {
+            var query = document.getElementById("searchQuery").value.toLowerCase();
+            var rows = document.querySelectorAll("#readersTable tr");
+
+            rows.forEach(function(row) {
+                var name = row.cells[1].textContent.toLowerCase();
+                var contact = row.cells[2].textContent.toLowerCase();
+                var reference = row.cells[3].textContent.toLowerCase();
+
+                if (name.includes(query) || contact.includes(query) || reference.includes(query)) {
+                    row.style.display = "";
+                } else {
+                    row.style.display = "none";
+                }
+            });
         }
 
     </script>

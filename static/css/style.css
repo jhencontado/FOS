@@ -485,7 +485,7 @@ table {
     width: 100%;
     table-layout: fixed;
     border-collapse: collapse;
-    text-align: left;
+    text-align: center;
 }
 
 th, td {
@@ -504,7 +504,7 @@ td img {
     object-fit: cover;
     border-radius: 5px;
 }
-/* Para hindi lumipat ang table kapag nag-search */
+
 #bookTable {
     display: block;
     width: 100%;

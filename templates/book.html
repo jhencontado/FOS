@@ -5,64 +5,221 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Manage Books</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-     <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}"> <!-- Sidebar CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://kit.fontawesome.com/YOUR-FONTAWESOME-CODE.js" crossorigin="anonymous"></script>
 </head>
 <body>
+
 {% include "sidebar.html" %}
-    <div class="content">
-        <h1>Manage Books</h1>
 
-        <form id="searchForm">
-            <input type="text" id="searchQuery" name="search" placeholder="Search by title, author, or genre" value="{{ search_query }}">
-            <button type="submit">Search</button>
-        </form>
+<div class="content">
+    <h1>Manage Books</h1>
 
-        <table border="1">
-            <thead>
-                <tr>
-                    <th>Cover</th>
-                    <th>Title</th>
-                    <th>Author</th>
-                    <th>Genre</th>
-                    <th>Publisher</th>
-                    <th>Year</th>
-                    <th>ISBN</th>
-                    <th>Available</th>
+    <!-- Search Form & Add Book Button -->
+    <form id="searchForm">
+        <input type="text" id="searchQuery" name="search" placeholder="Search by title, author, or genre" value="{{ search_query }}">
+        <button type="submit">Search</button>
+        <button type="button" id="openAddBookModal">
+            <i class="fas fa-plus"></i> Add Book
+        </button>
+    </form>
+
+    <!-- Book Table -->
+    <table border="1">
+        <thead>
+            <tr>
+                <th>Cover</th>
+                <th>Title</th>
+                <th>Author</th>
+                <th>Genre</th>
+                <th>Publisher</th>
+                <th>Year</th>
+                <th>ISBN</th>
+                <th>Available</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="bookTable">
+            {% if books %}
+                {% for book in books %}
+                <tr data-id="{{ book.book_id }}" data-title="{{ book.title }}"
+                    data-author="{{ book.author }}" data-genre="{{ book.genre }}"
+                    data-publisher="{{ book.publisher }}" data-year="{{ book.year_publish }}"
+                    data-isbn="{{ book.ISBN }}" data-available="{{ book.available_qnty }}">
+
+                    <td>
+                        {% if book.image %}
+                            <img src="{{ url_for('static', filename='image/' + book.image) }}" alt="Book Cover" width="50">
+                        {% else %}
+                            <img src="{{ url_for('static', filename='image/default.jpg') }}" alt="No Image" width="50">
+                        {% endif %}
+                    </td>
+                    <td>{{ book.title }}</td>
+                    <td>{{ book.author }}</td>
+                    <td>{{ book.genre or 'N/A' }}</td>
+                    <td>{{ book.publisher }}</td>
+                    <td>{{ book.year_publish }}</td>
+                    <td>{{ book.ISBN }}</td>
+                    <td>{{ book.available_qnty }}</td>
+                    <td>
+                        <button class="edit-btn"><i class="fas fa-edit"></i></button>
+                        <button class="delete-btn"><i class="fas fa-trash"></i></button>
+                    </td>
                 </tr>
-            </thead>
-            <tbody id="bookTable">
-                {% if books %}
-                     {% for book in books %}
-                    <tr>
-                        <td>
-                            {% if book.image %}
-                                <img src="{{ url_for('static', filename='image/' + book.image) }}" alt="Book Cover" width="50">
-                            {% else %}
-                                <img src="{{ url_for('static', filename='image/default.jpg') }}" alt="No Image" width="50">
-                             {% endif %}
-                        </td>
-                        <td>{{ book.title }}</td>
-                        <td>{{ book.author }}</td>
-                        <td>{{ book.genre or 'N/A' }}</td>
-                        <td>{{ book.publisher }}</td>
-                        <td>{{ book.year_publish }}</td>
-                        <td>{{ book.ISBN }}</td>
-                        <td>{{ book.available_qnty }}</td>
-                        </tr>
-                        {% endfor %}
-                    {% else %}
-                        <tr>
-                            <td colspan="8">No books available</td>
-                        </tr>
-                    {% endif %}
-            </tbody>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="9">No books available</td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
 
-        </table>
-    </div>
+<!-- Add Book Modal -->
+<div id="addBookModal" style="display: none;">
+    <h2>Add a New Book</h2>
+     <form id="addBookForm" enctype="multipart/form-data">
+        <input type="text" name="title" placeholder="Title" required>
+        <input type="text" name="author" placeholder="Author" required>
+        <input type="text" name="genre" placeholder="Genre">
+        <input type="text" name="publisher" placeholder="Publisher">
+        <input type="number" name="year_publish" placeholder="Year" required>
+        <input type="text" name="ISBN" placeholder="ISBN" required>
+        <input type="number" name="available_qnty" placeholder="Available Quantity" required>
+        <input type="file" name="image">
+        <button type="submit">Save Book</button>
+        <button type="button" id="closeAddBookModal">Cancel</button>
+    </form>
+</div>
 
-    <script>
-    $(document).ready(function() {
+
+<!-- Edit Book Modal -->
+<div id="editBookModal" style="display: none;">
+    <h2>Edit Book</h2>
+    <form id="editBookForm">
+        <input type="hidden" name="book_id" id="editBookId">
+        <input type="text" name="title" id="editTitle" placeholder="Title" required>
+        <input type="text" name="author" id="editAuthor" placeholder="Author" required>
+        <input type="text" name="genre" id="editGenre" placeholder="Genre">
+        <input type="text" name="publisher" id="editPublisher" placeholder="Publisher">
+        <input type="number" name="year_publish" id="editYearPublish" placeholder="Year" required>
+        <input type="text" name="ISBN" id="editISBN" placeholder="ISBN" required>
+        <input type="number" name="available_qnty" id="editAvailable" placeholder="Available Quantity" required>
+        <input type="file" name="image" id="editImage">
+        <button type="submit">Update Book</button>
+        <button type="button" id="closeEditBookModal">Cancel</button>
+    </form>
+</div>
+
+
+<script>
+$(document).ready(function() {
+    // Open Modal
+    $("#openAddBookModal").click(function() {
+        $("#addBookModal").show();
+    });
+
+    // Close Modal
+    $("#closeAddBookModal").click(function() {
+        $("#addBookModal").hide();
+    });
+
+    // Handle Add Book Form Submission
+    $("#addBookForm").submit(function(event) {
+        event.preventDefault();
+
+        var formData = new FormData(this);
+
+        $.ajax({
+            url: "/add_book",
+            type: "POST",
+            data: formData,
+            processData: false,
+            contentType: false,
+            success: function(response) {
+                alert(response.message);
+                location.reload();
+            },
+            error: function(xhr) {
+                alert("Error: " + xhr.responseText);
+            }
+        });
+    });
+
+    // Handle Delete Book
+    $(".delete-btn").click(function() {
+        var bookId = $(this).closest("tr").data("id");
+
+        if (confirm("Are you sure you want to delete this book?")) {
+            $.post(`/delete_book/${bookId}`, function(response) {
+                alert(response.message);
+                location.reload();
+            }).fail(function(xhr) {
+                alert("Error: " + xhr.responseText);
+            });
+        }
+    });
+
+
+    // ✅ Open Edit Modal & Automatically Fill Form
+    $(document).on("click", ".edit-btn", function() {
+        var row = $(this).closest("tr");  // Get the selected row
+
+        // ✅ Extract book details from data attributes
+        var bookId = row.attr("data-id");
+        var title = row.attr("data-title");
+        var author = row.attr("data-author");
+        var genre = row.attr("data-genre");
+        var publisher = row.attr("data-publisher");
+        var yearPublish = row.attr("data-year");
+        var isbn = row.attr("data-isbn");
+        var availableQnty = row.attr("data-available");
+
+        // ✅ Fill the modal with extracted book details
+        $("#editBookId").val(bookId);
+        $("#editTitle").val(title);
+        $("#editAuthor").val(author);
+        $("#editGenre").val(genre);
+        $("#editPublisher").val(publisher);
+        $("#editYearPublish").val(yearPublish);
+        $("#editISBN").val(isbn);
+        $("#editAvailable").val(availableQnty);
+
+        // ✅ Show the edit modal
+        $("#editBookModal").show();
+    });
+
+    // ✅ Close Edit Modal
+    $("#closeEditBookModal").click(function() {
+        $("#editBookModal").hide();
+    });
+
+    // ✅ Handle Update Book Form Submission via AJAX
+    $("#editBookForm").submit(function(event) {
+        event.preventDefault(); // Prevent form reload
+
+        var formData = new FormData(this); // Collect form data
+
+        $.ajax({
+            url: "/update_book",
+            type: "POST",
+            data: formData,
+            processData: false,  // Prevent jQuery from processing the data
+            contentType: false,  // Prevent jQuery from setting content type
+            success: function(response) {
+                alert(response.message);
+                location.reload();  // Refresh the page to show updated data
+            },
+            error: function(xhr) {
+                alert("Error: " + xhr.responseText);
+            }
+        });
+    });
+
+
+    // Handle Search
     $("#searchForm").submit(function(event) {
         event.preventDefault();
         var searchQuery = $("#searchQuery").val();
@@ -75,13 +232,13 @@
             headers: { "X-Requested-With": "XMLHttpRequest" },
             success: function(response) {
                 var bookTable = $("#bookTable");
-                bookTable.empty(); // I-clear lang kapag may search
+                bookTable.empty();
 
                 if (response.books.length > 0) {
                     $(response.books).each(function(index, book) {
                         var imagePath = book.image ? `/static/image/${book.image}` : `/static/image/default.jpg`;
 
-                        var row = `<tr>
+                        var row = `<tr data-id="${book.book_id}">
                             <td><img src="${imagePath}" alt="Book Cover" width="50"></td>
                             <td>${book.title}</td>
                             <td>${book.author}</td>
@@ -90,22 +247,24 @@
                             <td>${book.year_publish}</td>
                             <td>${book.ISBN}</td>
                             <td>${book.available_qnty}</td>
+                            <td>
+                                <button class="edit-btn"><i class="fas fa-edit"></i></button>
+                                <button class="delete-btn"><i class="fas fa-trash"></i></button>
+                            </td>
                         </tr>`;
                         bookTable.append(row);
                     });
                 } else {
-                    bookTable.append('<tr><td colspan="8">No books found</td></tr>');
+                    bookTable.append('<tr><td colspan="9">No books found</td></tr>');
                 }
             },
-            error: function(xhr, status, error) {
-                console.error("Error fetching books:", error);
+            error: function(xhr) {
+                console.error("Error fetching books:", xhr.responseText);
             }
         });
     });
 });
-
 </script>
-
 
 </body>
 </html>

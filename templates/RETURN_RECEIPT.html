@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Receipt</title>
+    <title>Return Receipt</title>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; }
@@ -27,9 +27,9 @@
 <body>
 
 <div class="container" id="receipt-section">
-    <h2>Library Receipt</h2>
+    <h2>Book Return Receipt</h2>
 
-    <p><strong>Transaction ID:</strong> {{ receipt.transaction_id[:8] }}</p>
+    <p><strong>Issued Number:</strong> {{ receipt.issued_number }}</p>
 
     <h4>Admin Details</h4>
     <p><strong>Admin Name:</strong> {{ receipt.admin.name }}</p>
@@ -40,29 +40,17 @@
     <p><strong>Contact:</strong> {{ receipt.reader.contact }}</p>
 
     <h4>Book Details</h4>
-    <p><strong>Start Date:</strong> {{ receipt.start_date }}</p>
+    <p><strong>Book Title:</strong> {{ receipt.book.title }}</p>
+
+    <h4>Return Details</h4>
     <p><strong>Return Date:</strong> {{ receipt.return_date }}</p>
+    <p><strong>Exceed Days:</strong> {{ receipt.exceed_days }}</p>
+    <p><strong>Fine:</strong> {{ receipt.fine }}</p>
 
-    <table>
-        <thead>
-            <tr>
-                <th>Book Title</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for book in receipt.books %}
-                <tr>
-                    <td>{{ book.title }}</td>
-                </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
-
-<!-- Buttons -->
-<div class="btn-container">
-    <button class="btn btn-print" onclick="printReceipt()">Print</button>
-    <button class="btn btn-home" onclick="window.location.href='/dashboard'">Home</button>
+    <div class="btn-container">
+        <button class="btn btn-print" onclick="printReceipt()">Print</button>
+        <button class="btn btn-home" onclick="window.location.href='/dashboard'">Home</button>
+    </div>
 </div>
 
 <script>
@@ -70,9 +58,6 @@
 function printReceipt() {
     window.print();
 }
-
-
-
 </script>
 
 </body>
