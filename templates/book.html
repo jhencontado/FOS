@@ -5,9 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Manage Books</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://kit.fontawesome.com/YOUR-FONTAWESOME-CODE.js" crossorigin="anonymous"></script>
+
 </head>
 <body>
 
@@ -37,6 +36,7 @@
                 <th>Year</th>
                 <th>ISBN</th>
                 <th>Available</th>
+                <th>Book Amount</th>
                 <th>Actions</th>
             </tr>
         </thead>
@@ -46,7 +46,8 @@
                 <tr data-id="{{ book.book_id }}" data-title="{{ book.title }}"
                     data-author="{{ book.author }}" data-genre="{{ book.genre }}"
                     data-publisher="{{ book.publisher }}" data-year="{{ book.year_publish }}"
-                    data-isbn="{{ book.ISBN }}" data-available="{{ book.available_qnty }}">
+                    data-isbn="{{ book.ISBN }}" data-available="{{ book.available_qnty }}"
+                    data-book-amount="{{ book.book_amount }}">  <!-- Add this line -->
 
                     <td>
                         {% if book.image %}
@@ -62,6 +63,7 @@
                     <td>{{ book.year_publish }}</td>
                     <td>{{ book.ISBN }}</td>
                     <td>{{ book.available_qnty }}</td>
+                    <td>{{ book.book_amount }}</td>
                     <td>
                         <button class="edit-btn"><i class="fas fa-edit"></i></button>
                         <button class="delete-btn"><i class="fas fa-trash"></i></button>
@@ -88,6 +90,7 @@
         <input type="number" name="year_publish" placeholder="Year" required>
         <input type="text" name="ISBN" placeholder="ISBN" required>
         <input type="number" name="available_qnty" placeholder="Available Quantity" required>
+         <input type="number" name="book_amount" placeholder="Book Amount" required>  <!-- NEW FIELD -->
         <input type="file" name="image">
         <button type="submit">Save Book</button>
         <button type="button" id="closeAddBookModal">Cancel</button>
@@ -107,6 +110,7 @@
         <input type="number" name="year_publish" id="editYearPublish" placeholder="Year" required>
         <input type="text" name="ISBN" id="editISBN" placeholder="ISBN" required>
         <input type="number" name="available_qnty" id="editAvailable" placeholder="Available Quantity" required>
+        <input type="number" name="book_amount" id="editBookAmount" placeholder="Book Amount" required>
         <input type="file" name="image" id="editImage">
         <button type="submit">Update Book</button>
         <button type="button" id="closeEditBookModal">Cancel</button>
@@ -115,6 +119,7 @@
 
 
 <script>
+
 $(document).ready(function() {
     // Open Modal
     $("#openAddBookModal").click(function() {
@@ -176,6 +181,8 @@ $(document).ready(function() {
         var yearPublish = row.attr("data-year");
         var isbn = row.attr("data-isbn");
         var availableQnty = row.attr("data-available");
+        var bookAmount = row.attr("data-book-amount");  // Get book_amount from data attribute
+
 
         // ✅ Fill the modal with extracted book details
         $("#editBookId").val(bookId);
@@ -186,6 +193,7 @@ $(document).ready(function() {
         $("#editYearPublish").val(yearPublish);
         $("#editISBN").val(isbn);
         $("#editAvailable").val(availableQnty);
+        $("#editBookAmount").val(bookAmount);  // Populate the field
 
         // ✅ Show the edit modal
         $("#editBookModal").show();

@@ -1,23 +1,33 @@
 import datetime
+import base64
 
+#import app
 import bcrypt
 from flask import Flask, render_template,jsonify, request, redirect, url_for, flash, session
 from flask_mysqldb import MySQL
 from datetime import datetime
 import time
 import MySQLdb.cursors
-
+from werkzeug.utils import secure_filename
 import os
 
 
 
 app = Flask(__name__, static_folder='static')
+
+
 app.config['SECRET_KEY'] = os.urandom(24)
 # MySQL Configuration
 app.config['MYSQL_HOST'] = 'localhost'
 app.config['MYSQL_USER'] = 'dbadmin'
 app.config['MYSQL_PASSWORD'] = 'Jheyan061709'
 app.config['MYSQL_DB'] = 'library'
+
+
+# File Upload Configuration
+app.config["UPLOAD_FOLDER"] = os.path.join("static", "uploads")
+os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+
 
 mysql = MySQL(app)
 #today_date = datetime.date.today()
@@ -40,10 +50,24 @@ def register():
         email = request.form['email']
         role = request.form['role']
 
+        # Process photo
+        photo_data = request.form.get("photo", "")
+        if photo_data:
+            photo_data = photo_data.replace("data:image/png;base64,", "")
+            photo_bytes = base64.b64decode(photo_data)
+            photo_filename = secure_filename(f"{username}.png")
+            photo_path = os.path.join(app.config["UPLOAD_FOLDER"], photo_filename)
+
+            with open(photo_path, "wb") as f:
+                f.write(photo_bytes)
+        else:
+            photo_filename = "default.png"  # Fallback image if no photo is taken
+
+
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
         cursor.execute(
-            'INSERT INTO admin (name, contact_number, username, password, email, role) VALUES (%s, %s, %s, %s, %s, %s)',
-            (name, contact_number, username, password, email, role)
+            'INSERT INTO admin (name, contact_number, username, password, email, role,photo) VALUES (%s,%s, %s, %s, %s, %s, %s)',
+            (name, contact_number, username, password, email, role, photo_filename)
         )
         mysql.connection.commit()
         cursor.close()
@@ -94,85 +118,121 @@ def logout():
     return redirect(url_for('login'))
 
 
+@app.context_processor
+def inject_admin():
+    if 'admin_id' in session:
+        cur = mysql.connection.cursor()
+        cur.execute("SELECT name, photo FROM admin WHERE admin_id = %s", (session['admin_id'],))
+        admin = cur.fetchone()
+        cur.close()
+
+        if admin:
+            name = admin[0] if admin[0] else "Admin"
+            photo = admin[1] if admin[1] else "default.png"  # Default image if None
+
+            print("Admin Photo Path:", photo)  # Debugging Line
+
+            return {'name': name, 'photo': photo}
+
+    return {'name': "Guest", 'photo': "default.png"}  # Default values when no admin is logged in
+
+
 @app.route('/dashboard-data')
 def dashboard_data():
-    cur = mysql.connection.cursor()
+    if 'admin_id' in session:
+        cur = mysql.connection.cursor(DictCursor)
 
-    # Get the count of registered readers
-    cur.execute("SELECT COUNT(*) FROM reader")
-    registered_readers = cur.fetchone()[0]
+        # Get the stats for the dashboard
+        cur.execute("SELECT COUNT(*) FROM reader WHERE status = 'active'")
+        registered_readers = cur.fetchone()['COUNT(*)']
 
-    # Get the total books count
-    cur.execute("SELECT COUNT(*) FROM book")
-    total_books = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM book")
+        total_books = cur.fetchone()['COUNT(*)']
 
-    # Get the issued books count
-    cur.execute("SELECT COUNT(*) FROM issued")
-    issued_books = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM issued WHERE return_date IS NULL")
+        issued_books = cur.fetchone()['COUNT(*)']
 
-    # Get the overdue books count (books that should have been returned)
-    cur.execute("SELECT COUNT(*) FROM issued WHERE return_date < CURDATE()")
-    overdue_books = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM issued WHERE return_date IS NOT NULL AND return_date < CURDATE()")
+        overdue_books = cur.fetchone()['COUNT(*)']
 
-    # Get latest readers list
-    cur.execute("SELECT reader_id, name, contact_number, email FROM reader ORDER BY reader_id DESC LIMIT 5")
-    readers = cur.fetchall()
+        # Get the latest readers
+        cur.execute(
+            "SELECT reader_id as id, name, contact_number as contact, email FROM reader ORDER BY reader_id DESC LIMIT 5")
+        readers = cur.fetchall()
 
-    # Get latest books list
-    cur.execute("SELECT book_id, title, author, available_qnty, image FROM book ORDER BY book_id DESC LIMIT 5")
-    books = cur.fetchall()
+        # Get the latest books
+        cur.execute(
+            "SELECT book_id as id, title, author, available_qnty as available FROM book ORDER BY book_id DESC LIMIT 5")
+        books = cur.fetchall()
 
-    # Get top picks books (you can modify the logic here)
-    cur.execute("SELECT book_id, title, image FROM book ORDER BY RAND() LIMIT 5")
-    top_books = cur.fetchall()
+        # Get top picks books (use top-rated or most issued books as an example)
+        cur.execute("SELECT title, image FROM book WHERE available_qnty > 0 ORDER BY book_id DESC LIMIT 5")
+        top_books = cur.fetchall()
 
-    cur.close()
+        cur.close()
 
-    return jsonify({
-        "registeredReaders": registered_readers,
-        "totalBooks": total_books,
-        "issuedBooks": issued_books,
-        "overdueBooks": overdue_books,
-        "readers": [{"id": r[0], "name": r[1], "contact": r[2], "email": r[3]} for r in readers],
-        "books": [{"id": b[0], "title": b[1], "author": b[2], "available": b[3]} for b in books],
-        "topBooks": [{"id": tb[0], "title": tb[1], "image": tb[2]} for tb in top_books]  # Include images
-    })
+        # Send all the data to the frontend
+        return jsonify({
+            'registeredReaders': registered_readers,
+            'totalBooks': total_books,
+            'issuedBooks': issued_books,
+            'overdueBooks': overdue_books,
+            'readers': readers,
+            'books': books,
+            'topBooks': top_books
+        })
 
+    return jsonify({"error": "Unauthorized"}), 401
+
+
+from MySQLdb.cursors import DictCursor
 
 @app.route('/dashboard')
 def dashboard():
-    if 'admin_id' in session:
-        cur = mysql.connection.cursor()
-        cur.execute("SELECT name FROM admin WHERE admin_id = %s", (session['admin_id'],))
-        admin_name = cur.fetchone()[0]  # Fetch the admin's name
+    if 'admin_id' not in session:
+        print("Session does not contain admin_id")  # Debugging
+        return "Unauthorized", 401
+
+    try:
+        cur = mysql.connection.cursor(DictCursor)
+        cur.execute("SELECT name, photo FROM admin WHERE admin_id = %s", (session['admin_id'],))
+        admin_data = cur.fetchone()
         cur.close()
-        return render_template('dashboard.html', name=admin_name)
-    return "Unauthorized", 401
+
+        if admin_data:
+            return render_template(
+                'dashboard.html',
+                name=admin_data['name'],
+                photo=admin_data['photo'],
+                current_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            )
+        else:
+            return "Admin not found", 404
+    except Exception as e:
+        print(f"Error fetching admin data: {e}")
+        return "Internal Server Error", 500
 
 
-
-#@app.route("/book")
-#def manage_books():harper lee
-   # return render_template("book.html")
 @app.route('/books', methods=['GET'])
 def books():
     search_query = request.args.get('search', '')
     cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
+    # Updated query to show all books, even those with 0 availability
     if search_query:
         query = """
-        SELECT * FROM book 
-        WHERE available_qnty > 0 AND 
-              (title LIKE %s OR author LIKE %s OR genre LIKE %s)
+        SELECT *, CONCAT('₱', FORMAT(book_amount, 2)) AS book_amount_display 
+        FROM book 
+        WHERE title LIKE %s OR author LIKE %s OR genre LIKE %s
         """
         cursor.execute(query, (f"%{search_query}%", f"%{search_query}%", f"%{search_query}%"))
     else:
-        query = "SELECT * FROM book WHERE available_qnty > 0"
+        query = "SELECT *, CONCAT('₱', FORMAT(book_amount, 2)) AS book_amount_display FROM book"
         cursor.execute(query)
 
     books = cursor.fetchall()
 
-    # Update reader table with the count of lent books
+    # Fetch the count of lent books per reader (same logic as before)
     cursor.execute("""
     SELECT reader_id, COUNT(*) AS lend_count 
     FROM issued 
@@ -186,7 +246,7 @@ def books():
         UPDATE reader SET lend_book = %s WHERE reader_id = %s
         """, (reader['lend_count'], reader['reader_id']))
 
-    mysql.connection.commit()  # Commit the changes
+    mysql.connection.commit()
     cursor.close()
 
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -207,15 +267,15 @@ def add_book():
         cursor = mysql.connection.cursor()
 
         query = """
-        INSERT INTO book (title, author, genre, publisher, year_publish, ISBN, available_qnty, image) 
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO book (title, author, genre, publisher, year_publish, ISBN, available_qnty, book_amount, image) 
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
 
         image_filename = file.filename if file else 'default.jpg'
         values = (
             data['title'], data['author'], data.get('genre', ''),
             data.get('publisher', ''), data['year_publish'],
-            data['ISBN'], data['available_qnty'], image_filename
+            data['ISBN'], data['available_qnty'], data['book_amount'], image_filename
         )
 
         cursor.execute(query, values)
@@ -245,25 +305,25 @@ def update_book():
             query = """
             UPDATE book 
             SET title=%s, author=%s, genre=%s, publisher=%s, 
-                year_publish=%s, ISBN=%s, available_qnty=%s, image=%s
+                year_publish=%s, ISBN=%s, available_qnty=%s, book_amount=%s, image=%s
             WHERE book_id=%s
             """
             values = (
                 data['title'], data['author'], data.get('genre', ''),
                 data.get('publisher', ''), data['year_publish'],
-                data['ISBN'], data['available_qnty'], image_filename, data['book_id']
+                data['ISBN'], data['available_qnty'], data['book_amount'], image_filename, data['book_id']
             )
         else:
             query = """
             UPDATE book 
             SET title=%s, author=%s, genre=%s, publisher=%s, 
-                year_publish=%s, ISBN=%s, available_qnty=%s
+                year_publish=%s, ISBN=%s, available_qnty=%s, book_amount=%s
             WHERE book_id=%s
             """
             values = (
                 data['title'], data['author'], data.get('genre', ''),
                 data.get('publisher', ''), data['year_publish'],
-                data['ISBN'], data['available_qnty'], data['book_id']
+                data['ISBN'], data['available_qnty'], data['book_amount'], data['book_id']
             )
 
         cursor.execute(query, values)
@@ -275,6 +335,7 @@ def update_book():
     except Exception as e:
         print("Error Updating Book:", str(e))
         return jsonify({"error": str(e)}), 500
+
 
 # ✅ Delete a book
 @app.route('/delete_book/<int:book_id>', methods=['POST'])
@@ -324,21 +385,34 @@ def add_reader():
         reference_id = request.form['reference_id']
         address = request.form['address']
         email = request.form['email']
+        photo_data = request.form['photo']  # Base64 image data
 
-        cursor = mysql.connection.cursor()
-        query = """
-        INSERT INTO reader (name, contact_number, reference_id, address, email)
-        VALUES (%s, %s, %s, %s, %s)
-        """
+        # Convert Base64 to an image file
+        if photo_data:
+            photo_filename = f"{name.replace(' ', '_')}_{int(datetime.timestamp(datetime.now()))}.png"
+            photo_path = os.path.join(app.config["UPLOAD_FOLDER"], photo_filename)
 
-        cursor.execute(query, (name, contact_number, reference_id, address, email))
+            # Save the image
+            with open(photo_path, "wb") as fh:
+                fh.write(base64.b64decode(photo_data.split(",")[1]))
+
+        else:
+            photo_filename = "default.png"
+
+        # Insert into database
+        cur = mysql.connection.cursor()
+        cur.execute("""
+            INSERT INTO reader (name, contact_number, reference_id, address, email, photo) 
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (name, contact_number, reference_id, address, email, photo_filename))
+
         mysql.connection.commit()
-        cursor.close()
+        cur.close()
 
-        return jsonify({"message": "Reader added successfully!"})
+        return jsonify({"message": "Reader registered successfully!"})
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(e)})
 
 
 @app.route('/delete_reader/<int:reader_id>', methods=['POST'])
@@ -441,16 +515,13 @@ def search_reader():
 
 @app.route('/fetch_books', methods=['GET'])
 def fetch_books():
-    cursor = mysql.connection.cursor()
-    cursor.execute("""
-        SELECT book_id, title, genre, author
-        FROM book
-        WHERE available_qnty > 0
-    """)
-    books = cursor.fetchall()
-    cursor.close()
+    cur = mysql.connection.cursor()
+    cur.execute("SELECT book_id, title FROM book WHERE available_qnty > 0")
+    books = cur.fetchall()
+    cur.close()
 
-    return jsonify(books)
+    # Return books as JSON
+    return jsonify([{'book_id': book[0], 'title': book[1]} for book in books])
 
 
 @app.route('/get_reader_status/<int:reader_id>', methods=['GET'])
@@ -472,6 +543,8 @@ def get_reader_status(reader_id):
 import uuid
 
 
+
+
 @app.route('/issue_books', methods=['POST'])
 def issue_books():
     data = request.json
@@ -479,12 +552,13 @@ def issue_books():
     books = data.get('books')
     start_date = data.get('start_date')
     return_date = data.get('return_date')
-    admin_id = data.get('admin_id')  # 🔹 Capture admin ID from request
+    admin_id = data.get('admin_id')  # Capture admin ID from request
+    fine_type = data.get('fine_type')
+    fine_amount = data.get('fine_amount')
 
     cur = mysql.connection.cursor()
 
-    # 🔹 Generate a short transaction ID (you can use a timestamp for simplicity)
-    import time
+    # Generate a short transaction ID (you can use a timestamp for simplicity)
     transaction_id = str(int(time.time()))  # Shortened version
 
     issued_numbers = []
@@ -522,13 +596,36 @@ def issue_books():
         mysql.connection.commit()
         print(f"Reader ID {reader_id} status updated to inactive")
 
+    # Fine logic: Check if the return date is overdue
+    from datetime import datetime
 
-    # 🔹 Fetch admin name for the receipt
+    fine_details = None
+    start_date_obj = datetime.strptime(start_date, "%Y-%m-%d")
+    return_date_obj = datetime.strptime(return_date, "%Y-%m-%d")
+    overdue_days = (return_date_obj - start_date_obj).days
+
+    # If the return date is overdue by more than 7 days, calculate fine
+    if overdue_days > 7:
+        fine_amount = (overdue_days - 7) * 20  # Fine of 20 per day after 7 days
+        fine_details = {
+            'fine_type': fine_type,
+            'fine_amount': round(fine_amount, 2),
+            'status': 'unpaid'
+        }
+
+        # Insert into fine table
+        cur = mysql.connection.cursor()
+        cur.execute("""
+                INSERT INTO fine (reader_id, fine_type, fine_amount, status, issued_date)
+                VALUES (%s, %s, %s, %s, CURDATE())
+            """, (reader_id, fine_details['fine_type'], fine_details['fine_amount'], fine_details['status']))
+
+    # Fetch admin name for the receipt
     cur.execute("SELECT name FROM admin WHERE admin_id = %s", (admin_id,))
     admin_name = cur.fetchone()
     admin_name = admin_name[0] if admin_name else "Unknown"
 
-    # 🔹 Fetch reader name and contact details
+    # Fetch reader name and contact details
     cur.execute("SELECT name, contact_number FROM reader WHERE reader_id = %s", (reader_id,))
     reader_data = cur.fetchone()
     reader_name = reader_data[0] if reader_data else "Unknown"
@@ -537,7 +634,7 @@ def issue_books():
     mysql.connection.commit()
     cur.close()
 
-    ## existing code ...
+    # Prepare session data
     session['receipt_data'] = {
         "transaction_id": transaction_id,
         "admin": {
@@ -551,7 +648,8 @@ def issue_books():
         },
         "start_date": start_date,
         "return_date": return_date,
-        "books": [{"title": title} for title in book_titles]
+        "books": [{"title": title} for title in book_titles],
+        "fine_details": fine_details  # Add fine details if any
     }
 
     # Debugging session data before returning it
@@ -561,6 +659,9 @@ def issue_books():
         "receipt_url": "/receipt",  # Optional: You can redirect the user to this URL after issuing books
         "receipt": session['receipt_data']  # Send the receipt as part of the response
     })
+
+
+
 @app.route('/receipt', methods=['GET'])
 def receipt():
     receipt_data = session.get('receipt_data')  # Ensure receipt data is stored in session
@@ -601,6 +702,27 @@ def get_logged_in_admin():
         return jsonify({"error": "Admin not logged in"}), 401
 
 
+@app.route('/update_fine_status', methods=['POST'])
+def update_fine_status():
+    data = request.json
+    fine_id = data.get('fine_id')
+    new_status = data.get('new_status')  # Either 'paid' or 'unpaid'
+
+    # Ensure the new status is either 'paid' or 'unpaid'
+    if new_status not in ['paid', 'unpaid']:
+        return jsonify({"error": "Invalid fine status."}), 400
+
+    # Update the fine status in the database
+    cur = mysql.connection.cursor()
+    cur.execute("UPDATE fine SET status = %s WHERE fine_id = %s", (new_status, fine_id))
+
+    # Commit changes
+    mysql.connection.commit()
+    cur.close()
+
+    return jsonify({"message": "Fine status updated successfully!"}), 200
+
+
 @app.route('/fetch_issued', methods=['GET'])
 def fetch_issued():
     search_query = request.args.get('search', '')
@@ -608,16 +730,26 @@ def fetch_issued():
 
     query = """
     SELECT issued.issued_number, issued.reader_id, reader.name, issued.book_id, 
-           book.title, issued.start_date, issued.return_date, issued.transaction_id
+           book.title, issued.start_date, issued.return_date, issued.transaction_id, reader.status
     FROM issued
     JOIN reader ON issued.reader_id = reader.reader_id
     JOIN book ON issued.book_id = book.book_id
     WHERE reader.name LIKE %s OR issued.reader_id LIKE %s
     ORDER BY issued.issued_number DESC
     """
-    cur.execute(query, (f"%{search_query}%", f"%{search_query}%"))
-    issued_books = cur.fetchall()
-    cur.close()
+
+    try:
+        cur.execute(query, (f"%{search_query}%", f"%{search_query}%"))
+        issued_books = cur.fetchall()
+
+        if not issued_books:
+            return jsonify({"message": "No records found matching the search criteria."}), 404
+
+    except Exception as e:
+        print(f"Error fetching issued books: {e}")
+        return jsonify({"error": "An error occurred while fetching issued books."}), 500
+    finally:
+        cur.close()
 
     # Convert tuples to list of dictionaries
     issued_books_list = [
@@ -636,6 +768,64 @@ def fetch_issued():
 
     return jsonify(issued_books_list)
 
+
+@app.route('/fetch_transaction_details', methods=['GET'])
+def fetch_transaction_details():
+    transaction_id = request.args.get('transaction_id')
+
+    if not transaction_id:
+        return jsonify({"error": "Transaction ID is required"}), 400
+
+    try:
+        cur = mysql.connection.cursor()
+
+        query = """
+        SELECT issued.issued_number, issued.reader_id, reader.name, reader.email, 
+               reader.contact_number, reader.photo, 
+               book.title, book.author, book.genre, book.publisher, 
+               issued.start_date, issued.return_date, issued.transaction_id, issued.admin_id
+        FROM issued
+        JOIN reader ON issued.reader_id = reader.reader_id
+        JOIN book ON issued.book_id = book.book_id
+        WHERE issued.transaction_id = %s
+        """
+
+        cur.execute(query, (transaction_id,))
+        transaction = cur.fetchone()
+
+        if transaction:
+            transaction_details = {
+                "reader": {
+                    "name": transaction[2],
+                    "email": transaction[3],
+                    "contact_number": transaction[4],
+                    "photo": transaction[5] if transaction[5] else "default_photo.jpg",  # Ensure default exists or handle accordingly
+                },
+                "book": {
+                    "title": transaction[6],
+                    "author": transaction[7],
+                    "genre": transaction[8],
+                    "publisher": transaction[9]
+                },
+                "admin_id": transaction[12],
+                "start_date": transaction[10].strftime('%Y-%m-%d'),
+                "return_date": transaction[11].strftime('%Y-%m-%d'),
+                "transaction_id": transaction[12]
+            }
+            return jsonify(transaction_details)
+        else:
+            return jsonify({"error": "Transaction not found"}), 404
+
+    except Exception as e:
+        print(f"Error fetching transaction details: {e}")
+        return jsonify({"error": "An error occurred while fetching transaction details"}), 500
+    finally:
+        cur.close()
+
+@app.route('/fetch_reader/<int:reader_id>')
+def fetch_reader(reader_id):
+    reader = readers.get(reader_id, {})
+    return jsonify(reader)
 
 @app.route('/list_issued')
 def list_issued():

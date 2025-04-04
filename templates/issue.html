@@ -1,312 +1,259 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Issue Books</title>
+    <title>Issue Book</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <style>
-        .main-container {
-            display: flex;
-            gap: 20px;
-        }
-        .left-container, .right-container {
-            flex: 1;
-            padding: 20px;
-            border: 1px solid #ccc;
-            border-radius: 8px;
-            background: #f9f9f9;
-        }
-        .right-container {
-            max-width: 50%;
-        }
-    </style>
 </head>
+
 <body>
-{% include "sidebar.html" %}
+    {% include "sidebar.html" %}
 
-<div class="container">
-    <h2>Issue Books</h2>
-    <div class="main-container">
-        <!-- Left Container: Issue Book -->
-        <div class="left-container">
-            <h3>Issue Book</h3>
-            <div class="form-group">
-                <label for="reader-search">Search Reader (ID or Name):</label>
-                <input type="text" id="reader-search" placeholder="Enter reader ID or name">
-                <select id="reader-list">
-                    <option value="">Select Reader</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label>Name:</label>
-                <input type="text" id="reader-name" readonly>
-            </div>
-            <div class="form-group">
-                <label>Email:</label>
-                <input type="email" id="reader-email" readonly>
-            </div>
-            <div class="form-group">
-                <label>Contact:</label>
-                <input type="text" id="reader-contact" readonly>
-            </div>
-            <div class="form-group">
-                <label>Start Date:</label>
-                <input type="date" id="start-date">
-            </div>
-            <div class="form-group">
-                <label>Return Date:</label>
-                <input type="date" id="return-date">
+    <div class="container">
+        <h2>Issue Books</h2>
+        <div class="main-container">
+            <!-- Left Container: Issue Book -->
+            <div class="left-container">
+                <h3>Issue Book</h3>
+                <div class="form-group">
+                    <label for="reader-search">Search Reader (ID or Name):</label>
+                    <input type="text" id="reader-search" placeholder="Enter reader ID or name">
+                    <select id="reader-list">
+                        <option value="">Select Reader</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Name:</label>
+                    <input type="text" id="reader-name" readonly>
+                </div>
+                <div class="form-group">
+                    <label>Email:</label>
+                    <input type="email" id="reader-email" readonly>
+                </div>
+                <div class="form-group">
+                    <label>Contact:</label>
+                    <input type="text" id="reader-contact" readonly>
+                </div>
+                <div class="form-group">
+                    <label>Start Date:</label>
+                    <input type="date" id="start-date">
+                </div>
+                <div class="form-group">
+                    <label>Return Date:</label>
+                    <input type="date" id="return-date">
+                </div>
+
+                <h3>Selected Books</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Book Title</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="selected-books"></tbody>
+                </table>
+                <button id="checkout-btn">Checkout</button>
             </div>
 
-            <h3>Selected Books</h3>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Book Title</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody id="selected-books"></tbody>
-            </table>
-            <button id="checkout-btn">Checkout</button>
-        </div>
-
-        <!-- Right Container: Available Books -->
-        <div class="right-container">
-            <h3>Available Books</h3>
-            <div id="book-search">
-                <input type="text" id="search-title" placeholder="Search by Title">
-                <input type="text" id="search-genre" placeholder="Search by Genre">
-                <input type="text" id="search-author" placeholder="Search by Author">
+            <!-- Right Container: Available Books -->
+            <div class="right-container">
+                <h3>Available Books</h3>
+                <div id="book-search">
+                    <input type="text" id="search-title" placeholder="Search by Title">
+                    <input type="text" id="search-genre" placeholder="Search by Genre">
+                    <input type="text" id="search-author" placeholder="Search by Author">
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Book Title</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="book-list"></tbody>
+                </table>
             </div>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Book Title</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody id="book-list"></tbody>
-            </table>
         </div>
     </div>
-</div>
 
+    <script>
+        $(document).ready(function () {
+            let selectedBooks = [];
 
-<script>
-$(document).ready(function () {
-    let selectedBooks = [];
+            /** ============================
+             *  SEARCH & SELECT READER
+             *  ============================
+            **/
+            $('#reader-search').on('input', function () {
+                let query = $(this).val().trim();
+                if (query.length < 2) return; // Skip query if it's too short
 
-    /** ============================
-     *  SEARCH & SELECT READER
-     *  ============================
-    **/
-    $('#reader-search').on('input', function () {
-        let query = $(this).val().trim();
-        if (query.length < 2) return; // Skip query if it's too short
+                console.log("🔍 Searching for reader:", query);
 
-        console.log("🔍 Searching for reader:", query);
+                $.ajax({
+                    url: '/search_reader',
+                    type: 'GET',
+                    data: { query: query },
+                    dataType: 'json',
+                    success: function (data) {
+                        console.log("✅ Full reader search response:", data); // Debugging log
+                        let readerList = $('#reader-list');
+                        readerList.empty().append('<option value="">Select Reader</option>');
+                        if (!data || !Array.isArray(data) || data.length === 0) {
+                            console.warn("⚠️ No readers found.");
+                            alert("No readers found.");
+                            return;
+                        }
+                        // Populate the reader list
+                        data.forEach(reader => {
+                            readerList.append(`
+                                <option value="${reader.reader_id}"
+                                        data-name="${reader.name || ''}"
+                                        data-email="${reader.email || ''}"
+                                        data-contact="${reader.contact_number || ''}"
+                                        data-status="${reader.status || 'active'}">
+                                    ${reader.name} (ID: ${reader.reader_id})
+                                </option>
+                            `);
+                        });
+                    },
+                    error: function (xhr, status, error) {
+                        console.error("❌ Error fetching reader data:", xhr.responseText || error);
+                        alert("Error fetching reader data. Please check the console for details.");
+                    }
+                });
+            });
 
-        $.ajax({
-            url: '/search_reader',
-            type: 'GET',
-            data: { query: query },
-            dataType: 'json',
-            success: function (data) {
-                console.log("✅ Full reader search response:", data); // Debugging log
-                let readerList = $('#reader-list');
-                readerList.empty().append('<option value="">Select Reader</option>');
-                if (!data || !Array.isArray(data) || data.length === 0) {
-                    console.warn("⚠️ No readers found.");
-                    alert("No readers found.");
+            // Populate Reader Details
+            $('#reader-list').change(function () {
+                let selected = $(this).find(':selected');
+                let readerStatus = selected.data('status') || 'active';
+
+                $('#reader-name').val(selected.data('name') || '');
+                $('#reader-email').val(selected.data('email') || '');
+                $('#reader-contact').val(selected.data('contact') || '');
+
+                if (readerStatus === 'inactive') {
+                    alert('⚠️ This reader is inactive and cannot issue more books.');
+                    $('#checkout-btn').prop('disabled', true);
+                } else {
+                    $('#checkout-btn').prop('disabled', false);
+                    loadBooks(); // Fetch books only if the reader is active
+                }
+            });
+
+            /** ============================
+             *  FETCH AVAILABLE BOOKS
+             *  ============================
+            **/
+            function loadBooks() {
+                $.get('/fetch_books', function (data) {
+                    let bookList = $('#book-list');
+                    bookList.empty(); // Clear any previous books
+                    data.forEach(book => {
+                        bookList.append(`
+                            <tr>
+                                <td>${book.title}</td>
+                                <td>
+                                    <button class="btn btn-lend" data-id="${book.book_id}" data-title="${book.title}">Lend</button>
+                                </td>
+                            </tr>
+                        `);
+                    });
+                }).fail(function () {
+                    alert("Error fetching books. Please try again.");
+                });
+            }
+
+            // Load all books automatically when page loads
+            loadBooks();
+
+            /** ============================
+             *  HANDLE CHECKOUT
+             *  ============================
+            **/
+            $('#checkout-btn').click(function () {
+                let readerId = $('#reader-list').val();
+                let startDate = $('#start-date').val();
+                let returnDate = $('#return-date').val();
+
+                if (!readerId || !startDate || !returnDate) {
+                    alert('Please select reader, start date, and return date.');
                     return;
                 }
-                // Populate the reader list
-                data.forEach(reader => {
-                    readerList.append(`
-                        <option value="${reader.reader_id}"
-                                data-name="${reader.name || ''}"
-                                data-email="${reader.email || ''}"
-                                data-contact="${reader.contact_number || ''}"
-                                data-status="${reader.status || 'active'}">
-                            ${reader.name} (ID: ${reader.reader_id})
-                        </option>
+
+                // Proceed with checkout and issue books
+                saveBookIssue(readerId, startDate, returnDate);
+            });
+
+            function saveBookIssue(readerId, startDate, returnDate) {
+                let books = selectedBooks.map(book => book.bookId);
+
+                // Save issued details in the database
+                $.ajax({
+                    url: '/issue_books', // Backend endpoint to handle issuing books
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        reader_id: readerId,
+                        start_date: startDate,
+                        return_date: returnDate,
+                        books: books,
+                        admin_id: 1 // Admin ID should be dynamically retrieved
+                    }),
+                    success: function (response) {
+                        if (response.receipt_url) {
+                            window.location.href = response.receipt_url; // Redirect to the receipt page
+                        }
+                    },
+                    error: function (xhr, status, error) {
+                        console.error("❌ Error issuing book:", xhr.responseText || error);
+                        alert("Error issuing book. Please try again.");
+                    }
+                });
+            }
+
+            /** ============================
+             *  ADD SELECTED BOOKS TO UI
+             *  ============================
+            **/
+            $('#book-list').on('click', '.btn-lend', function () {
+                let bookId = $(this).data('id');
+                let bookTitle = $(this).data('title');
+
+                // Add book to selected books list
+                selectedBooks.push({ bookId, bookTitle });
+                updateSelectedBooksUI();
+            });
+
+            // Handle remove button click
+            $('#selected-books').on('click', '.btn-remove', function () {
+                let bookId = $(this).data('id');
+
+                // Remove book from selected books array
+                selectedBooks = selectedBooks.filter(book => book.bookId !== bookId);
+                updateSelectedBooksUI();
+            });
+
+            function updateSelectedBooksUI() {
+                let selectedBooksTable = $('#selected-books');
+                selectedBooksTable.empty();
+
+                selectedBooks.forEach(book => {
+                    selectedBooksTable.append(`
+                        <tr>
+                            <td>${book.bookTitle}</td>
+                            <td><button class="btn-remove" data-id="${book.bookId}">Remove</button></td>
+                        </tr>
                     `);
                 });
-            },
-            error: function (xhr, status, error) {
-                console.error("❌ Error fetching reader data:", xhr.responseText || error);
-                alert("Error fetching reader data. Please check the console for details.");
             }
         });
-    });
-
-    // Populate Reader Details
-    $('#reader-list').change(function () {
-        let selected = $(this).find(':selected');
-        let readerStatus = selected.data('status') || 'active';
-
-        $('#reader-name').val(selected.data('name') || '');
-        $('#reader-email').val(selected.data('email') || '');
-        $('#reader-contact').val(selected.data('contact') || '');
-
-        if (readerStatus === 'inactive') {
-            alert('⚠️ This reader is inactive and cannot issue more books.');
-            $('#checkout-btn').prop('disabled', true);
-        } else {
-            $('#checkout-btn').prop('disabled', false);
-            loadBooks(); // Fetch books only if the reader is active
-        }
-    });
-
-    /** ============================
-     *  FETCH AVAILABLE BOOKS
-     *  ============================
-    **/
-    function loadBooks() {
-        $.get('/fetch_books', function (data) {
-            let bookList = $('#book-list');
-            bookList.empty(); // Clear any previous books
-            data.forEach(book => {
-                bookList.append(`
-                    <tr>
-                        <td>${book[1]}</td>
-                        <td>
-                            <button class="btn btn-lend" data-id="${book[0]}" data-title="${book[1]}">Lend</button>
-                        </td>
-                    </tr>
-                `);
-            });
-        }).fail(function () {
-            alert("Error fetching books. Please try again.");
-        });
-    }
-
-    // Load all books automatically when page loads
-    loadBooks();
-
-    /** ============================
-     *  SEARCH BOOKS BY TITLE, GENRE, OR AUTHOR
-     *  ============================
-    **/
-    $('#search-title, #search-genre, #search-author').on('input', function () {
-        let title = $('#search-title').val().trim().toLowerCase();
-        let genre = $('#search-genre').val().trim().toLowerCase();
-        let author = $('#search-author').val().trim().toLowerCase();
-
-        $('#book-list tr').each(function () {
-            let bookTitle = $(this).find('td').eq(0).text().toLowerCase();
-            let match = true;
-
-            if (title && !bookTitle.includes(title)) match = false;
-            if (genre && !bookTitle.includes(genre)) match = false;
-            if (author && !bookTitle.includes(author)) match = false;
-
-            $(this).toggle(match);
-        });
-    });
-
-    /** ============================
-     *  ADD & REMOVE BOOKS
-     *  ============================
-    **/
-    // Add Book to Selection
-    $(document).on('click', '.btn-lend', function () {
-        let bookId = $(this).data('id');
-        let bookTitle = $(this).data('title');
-
-        if (!selectedBooks.some(book => book.id === bookId)) {
-            selectedBooks.push({ id: bookId, title: bookTitle });
-            $('#selected-books').append(`
-                <tr data-id="${bookId}">
-                    <td>${bookTitle}</td>
-                    <td>
-                        <button class="btn btn-remove" data-id="${bookId}">Remove</button>
-                    </td>
-                </tr>
-            `);
-        }
-    });
-
-    // Remove Book from Selection
-    $(document).on('click', '.btn-remove', function () {
-        let bookId = $(this).data('id');
-        selectedBooks = selectedBooks.filter(book => book.id !== bookId);
-        $(`#selected-books tr[data-id="${bookId}"]`).remove();
-    });
-
-    /** ============================
-     *  CHECKOUT PROCESS
-     *  ============================
-    **/
-    $('#checkout-btn').click(function () {
-        $.ajax({
-            url: '/get_logged_in_admin',
-            type: 'GET',
-            success: function (adminResponse) {
-                if (!adminResponse.admin_id) {
-                    alert("Admin not logged in. Please log in again.");
-                    return;
-                }
-
-                processCheckout(adminResponse.admin_id, adminResponse.admin_name);
-            },
-            error: function () {
-                alert("Error fetching admin details. Please log in again.");
-                window.location.href = "/login";
-            }
-        });
-    });
-
-    function processCheckout(adminId, adminName) {
-        let readerId = $('#reader-list').val();
-        let startDate = $('#start-date').val();
-        let returnDate = $('#return-date').val();
-
-        if (!readerId || selectedBooks.length === 0 || !startDate || !returnDate) {
-            alert('Please complete all fields before checking out.');
-            return;
-        }
-
-        let bookIds = selectedBooks.map(book => book.id);
-
-        $.ajax({
-            url: '/issue_books',
-            type: 'POST',
-            contentType: 'application/json',
-            data: JSON.stringify({
-                reader_id: readerId,
-                books: bookIds,
-                start_date: startDate,
-                return_date: returnDate,
-                admin_id: adminId
-            }),
-            success: function (response) {
-                console.log("✅ Response Data:", response);  // Debug log for receipt data
-
-                let issuedNumbers = response.receipt.books.map(book => book.issued_number);
-
-                // Store receipt data in sessionStorage
-                sessionStorage.setItem("receiptData", JSON.stringify({
-                    transaction_id: response.receipt.transaction_id,
-                    admin: response.receipt.admin,
-                    reader: response.receipt.reader,
-                    start_date: response.receipt.start_date,
-                    return_date: response.receipt.return_date,
-                    books: response.receipt.books
-                }));
-
-                // Redirect to receipt page
-                window.location.href = "/receipt";
-            },
-            error: function () {
-                alert("Error issuing books. Please try again.");
-            }
-        });
-    }
-});
-</script>
+    </script>
 </body>
+
 </html>

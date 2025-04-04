@@ -4,14 +4,38 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Library LMS</title>
-    <link rel="stylesheet" href="sidebar.css"> <!-- Link to the CSS file -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}"> <!-- Link to CSS file -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script>
+        function updateDateTime() {
+            const now = new Date();
+            const options = { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' };
+            const time = now.toLocaleTimeString();
+            const date = now.toLocaleDateString(undefined, options);
+            document.getElementById('currentDate').textContent = date;
+            document.getElementById('currentTime').textContent = time;
+        }
+        setInterval(updateDateTime, 1000);
+        window.onload = updateDateTime;
+    </script>
 </head>
 <body>
     <div class="sidebar">
-       <img src="{{ url_for('static', filename='image/logo2.png') }}"width="200" alt="Library Logo" class="sidebar-logo">
-        <h2></h2>
-        <ul>
+        <!-- Logo -->
+        <img src="{{ url_for('static', filename='image/logo2.png') }}" width="200" alt="Library Logo" class="sidebar-logo">
+
+        <!-- Admin Profile Section -->
+        <div class="admin-profile">
+            <img src="{{ url_for('static', filename='uploads/' + photo) }}" width="100" alt="Admin Photo" class="admin-photo">
+            <div class="admin-info">
+                <span class="admin-name">{{ name }}</span>
+                <p id="currentDate"></p>
+                <p id="currentTime"></p>
+            </div>
+        </div>
+
+        <!-- Sidebar Menu -->
+        <ul class="sidebar-menu">
             <li><a href="/dashboard"><i class="fas fa-home"></i> Home</a></li>
             <li><a href="/books"><i class="fas fa-book"></i> Manage Book</a></li>
             <li><a href="/readers"><i class="fas fa-users"></i> Readers</a></li>
@@ -20,7 +44,5 @@
             <li><a href="/return"><i class="fas fa-undo"></i> Return</a></li>
         </ul>
     </div>
-
-
 </body>
 </html>

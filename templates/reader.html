@@ -201,6 +201,7 @@
                             <th>Reference ID</th>
                             <th>Address</th>
                             <th>Email</th>
+                            <th>Photo</th>
                             <th>Status</th>
                             <th>Lent Books</th> <!-- New column for lent books -->
                             <th>Action</th>
@@ -256,35 +257,60 @@
             </div>
         </div>
 
-        <!-- Register New Reader Modal -->
         <div id="registerReaderModal" class="modal">
             <div class="modal-content">
-                <span class="close" onclick="closeModal()">&times;</span>
+                <span class="close" onclick="closeRegisterModal()">&times;</span>
                 <h3>Register New Reader</h3>
                 <form id="registerReaderForm" action="/add_reader" method="POST">
                     <label for="name">Full Name</label>
                     <input type="text" name="name" id="name" required>
-
                     <label for="contact_number">Contact Number</label>
                     <input type="text" name="contact_number" id="contact_number" required>
-
                     <label for="reference_id">Reference ID</label>
                     <input type="text" name="reference_id" id="reference_id" required>
-
                     <label for="address">Address</label>
                     <input type="text" name="address" id="address" required>
-
                     <label for="email">Email</label>
                     <input type="email" name="email" id="email" required>
 
+                    <label for="photo">Capture Photo</label>
+                    <video id="video" width="200" height="150" autoplay></video>
+                    <canvas id="canvas" style="display:none;"></canvas>
+                    <button type="button" onclick="capturePhoto()">Capture Photo</button>
+                    <input type="hidden" name="photo" id="photo">
+                    <img id="capturedImage" width="200" height="150" style="display:none;">
+
                     <button type="submit">Register Reader</button>
-                    <button type="button" onclick="closeModal()">Cancel</button>
+                    <button type="button" onclick="closeRegisterModal()">Cancel</button>
                 </form>
             </div>
         </div>
     </div>
-
+    <script src="{{ url_for('static', filename='js/reader.js') }}"></script>
     <script>
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(function(stream) {
+                document.getElementById("video").srcObject = stream;
+            })
+            .catch(function(err) {
+                console.log("Camera access denied:", err);
+            });
+
+        function capturePhoto() {
+            let video = document.getElementById("video");
+            let canvas = document.getElementById("canvas");
+            let context = canvas.getContext("2d");
+
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            let imageData = canvas.toDataURL("image/png");
+            document.getElementById("photo").value = imageData;
+
+            let capturedImage = document.getElementById("capturedImage");
+            capturedImage.src = imageData;
+            capturedImage.style.display = "block";
+        }
+
         // Show Edit Modal with Data
         function editReader(id, name, contact, refId, address, email) {
             console.log(id, name, contact, refId, address, email);  // Log to verify data

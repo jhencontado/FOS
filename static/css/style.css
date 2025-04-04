@@ -329,11 +329,38 @@ tr:nth-child(even) {
     box-shadow: 2px 0 5px rgba(0, 0, 0, 0.2);
 }
 
+/* Admin Profile */
+.admin-profile {
+    text-align: center;
+    padding: 15px 10px;
+    border-bottom: 1px solid #444; /* Line separator */
+}
+
+.admin-photo {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin-bottom: 30px;
+}
+
+.admin-info {
+    color: white;
+    font-size: 14px;
+}
+
+.admin-name {
+    font-weight: bold;
+    display: block;
+}
+
+
+
 /* Sidebar Title */
 .sidebar h2 {
     text-align: center;
 
-    margin-bottom: 20px;
+    margin-bottom: 50px;
     font-size: 24px;
 }
 
