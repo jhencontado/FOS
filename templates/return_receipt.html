@@ -29,7 +29,7 @@
 <div class="container" id="receipt-section">
     <h2>Book Return Receipt</h2>
 
-    <p><strong>Issued Number:</strong> {{ receipt.issued_number }}</p>
+    <p><strong>Return ID:</strong> {{ receipt.return_id }}</p>
 
     <h4>Admin Details</h4>
     <p><strong>Admin Name:</strong> {{ receipt.admin.name }}</p>
@@ -44,8 +44,10 @@
 
     <h4>Return Details</h4>
     <p><strong>Return Date:</strong> {{ receipt.return_date }}</p>
-    <p><strong>Exceed Days:</strong> {{ receipt.exceed_days }}</p>
-    <p><strong>Fine:</strong> {{ receipt.fine }}</p>
+    <p><strong>Fine Amount:</strong> {{ receipt.fine_details.amount }}</p>
+    <p><strong>Fine Type:</strong> {{ receipt.fine_details.type }}</p>
+    <p><strong>Fine Status:</strong> {{ receipt.fine_details.status }}</p>
+
 
     <div class="btn-container">
         <button class="btn btn-print" onclick="printReceipt()">Print</button>

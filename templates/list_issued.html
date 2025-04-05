@@ -15,7 +15,8 @@
         <input type="text" id="searchInput" placeholder="Search by Reader ID or Name">
         <div>
             <button id="filterOverdue">Overdue</button>
-            <button id="filterExceedLent">Exceed Lent (Inactive Readers)</button>
+            <button id="filterExceedLent">Readers with 5+ Borrowed Books</button>
+            <button id="showAll">Show All</button>
         </div>
         <table>
             <thead>
@@ -44,99 +45,122 @@
     </div>
 
     <script>
-        $(document).ready(function () {
-            function fetchData(query = '', filterOverdue = false, filterExceedLent = false) {
-                $.ajax({
-                    url: '/fetch_issued',
-                    method: 'GET',
-                    data: { search: query, overdue: filterOverdue, exceed_lent: filterExceedLent },
-                    success: function (data) {
-                        console.log(data); // Log data to check the structure
-                        let tableContent = '';
-                        data.forEach(item => {
-                            let rowClass = '';
-                            if (new Date(item.return_date) < new Date()) {
-                                rowClass = 'overdue';
-                            } else if (item.reader_status === 'inactive') {
-                                rowClass = 'exceed-lent';
-                            }
-                            tableContent += `<tr class="${rowClass}">
-                                <td>${item.issued_number}</td>
-                                <td>${item.reader_id}</td>
-                                <td>${item.name}</td>
-                                <td>${item.book_id}</td>
-                                <td>${item.title}</td>
-                                <td>${item.start_date}</td>
-                                <td>${item.return_date}</td>
-                                <td><a href="#" class="transaction-link" data-transaction-id="${item.transaction_id}">${item.transaction_id}</a></td>
-                            </tr>`;
-                        });
-                        $('#issuedList').html(tableContent);
+        function fetchData(query = '', filterOverdue = false, filterExceedLent = false) {
+            $.ajax({
+                url: '/fetch_issued',
+                method: 'GET',
+                data: {
+                    search: query,
+                    overdue: filterOverdue,
+                    exceed_lent: filterExceedLent
+                },
+                success: function (data) {
+                    if (data.length === 0) {
+                        $('#issuedList').html('<tr><td colspan="8">No records found.</td></tr>');
+                        return;
                     }
-                });
-            }
-            fetchData();
 
-            $('#filterOverdue').on('click', function () {
-                fetchData('', true, false);
-            });
+                    let tableContent = '';
+                    const today = new Date();
 
-            $('#filterExceedLent').on('click', function () {
-                fetchData('', false, true);
-            });
+                    data.forEach(item => {
+                        let rowClass = '';
+                        const returnDate = new Date(item.return_date);
 
-            $('#searchInput').on('keyup', function () {
-                let query = $(this).val();
-                fetchData(query);
-            });
+                        if (filterOverdue && returnDate < today) {
+                            rowClass += ' overdue';
+                        }
+                        if (filterExceedLent && item.total_borrowed >= 5) {
+                            rowClass += ' exceed-lent';
+                        }
 
-            // Open modal to view transaction details
-            $(document).on('click', '.transaction-link', function (e) {
-                e.preventDefault();
-                let transactionId = $(this).data('transaction-id');
+                        tableContent += `<tr class="${rowClass}">
+                            <td>${item.issued_number}</td>
+                            <td>${item.reader_id}</td>
+                            <td>${item.name}</td>
+                            <td>${item.book_id}</td>
+                            <td>${item.title}</td>
+                            <td>${item.start_date}</td>
+                            <td>${item.return_date}</td>
+                            <td><a href="#" class="transaction-link" data-transaction-id="${item.transaction_id}">${item.transaction_id}</a></td>
+                        </tr>`;
+                    });
 
-                // Fetch transaction details
-                $.ajax({
-                    url: '/fetch_transaction_details',
-                    method: 'GET',
-                    data: { transaction_id: transactionId },
-                    success: function (data) {
-                        let transactionDetails = `
-                            <h4>Reader Details:</h4>
-                            <img src="static/uploads/${data.reader.photo}" alt="Reader Photo" class="reader-photo">
-                            <p><strong>Name:</strong> ${data.reader.name}</p>
-                            <p><strong>Email:</strong> ${data.reader.email}</p>
-                            <p><strong>Contact:</strong> ${data.reader.contact_number}</p>
-                            <hr>
-                            <h4>Book Details:</h4>
-                            <p><strong>Title:</strong> ${data.book.title}</p>
-                            <p><strong>Author:</strong> ${data.book.author}</p>
-                            <p><strong>Genre:</strong> ${data.book.genre}</p>
-                            <p><strong>Publisher:</strong> ${data.book.publisher}</p>
-                            <hr>
-                            <h4>Issued Details:</h4>
-                            <p><strong>Admin ID:</strong> ${data.admin_id}</p>
-                            <p><strong>Start Date:</strong> ${data.start_date}</p>
-                            <p><strong>Return Date:</strong> ${data.return_date}</p>
-                            <p><strong>Transaction Number:</strong> ${data.transaction_id}</p>
-                        `;
-                        $('#transactionDetails').html(transactionDetails);
-                        $('#transactionModal').show();
-                    }
-                });
-            });
-
-            // Close the modal
-            $('.close').on('click', function () {
-                $('#transactionModal').hide();
-            });
-
-            // Close modal when clicking outside the modal content
-            $(window).on('click', function (event) {
-                if ($(event.target).is('#transactionModal')) {
-                    $('#transactionModal').hide();
+                    $('#issuedList').html(tableContent);
+                },
+                error: function () {
+                    $('#issuedList').html('<tr><td colspan="8">Error fetching records.</td></tr>');
                 }
             });
+        }
+
+        $('#filterOverdue').on('click', function () {
+            fetchData('', true, false);
+        });
+
+        $('#filterExceedLent').on('click', function () {
+            fetchData('', false, true);
+        });
+
+        $('#showAll').on('click', function () {
+            $('#searchInput').val('');
+            fetchData();
+        });
+
+        $('#searchInput').on('keyup', function () {
+            let query = $(this).val();
+            fetchData(query);
+        });
+
+        // Open modal to view transaction details
+        $(document).on('click', '.transaction-link', function (e) {
+            e.preventDefault();
+            let transactionId = $(this).data('transaction-id');
+
+            $.ajax({
+                url: '/fetch_transaction_details',
+                method: 'GET',
+                data: { transaction_id: transactionId },
+                success: function (data) {
+                    let transactionDetails = `
+                        <h4>Reader Details:</h4>
+                        <img src="static/uploads/${data.reader.photo}" alt="Reader Photo" class="reader-photo">
+                        <p><strong>Name:</strong> ${data.reader.name}</p>
+                        <p><strong>Email:</strong> ${data.reader.email}</p>
+                        <p><strong>Contact:</strong> ${data.reader.contact_number}</p>
+                        <hr>
+                        <h4>Book Details:</h4>
+                        <p><strong>Title:</strong> ${data.book.title}</p>
+                        <p><strong>Author:</strong> ${data.book.author}</p>
+                        <p><strong>Genre:</strong> ${data.book.genre}</p>
+                        <p><strong>Publisher:</strong> ${data.book.publisher}</p>
+                        <hr>
+                        <h4>Issued Details:</h4>
+                        <p><strong>Admin ID:</strong> ${data.admin_id}</p>
+                        <p><strong>Start Date:</strong> ${data.start_date}</p>
+                        <p><strong>Return Date:</strong> ${data.return_date}</p>
+                        <p><strong>Transaction Number:</strong> ${data.transaction_id}</p>
+                    `;
+                    $('#transactionDetails').html(transactionDetails);
+                    $('#transactionModal').show();
+                }
+            });
+        });
+
+        // Close modal
+        $('.close').on('click', function () {
+            $('#transactionModal').hide();
+        });
+
+        $(window).on('click', function (event) {
+            if ($(event.target).is('#transactionModal')) {
+                $('#transactionModal').hide();
+            }
+        });
+
+        // Fetch initial data on page load
+        $(document).ready(function () {
+            fetchData();
         });
     </script>
 
@@ -170,6 +194,20 @@
             border-radius: 5px;
         }
 
+        button {
+            margin: 5px;
+            padding: 8px 12px;
+            border: none;
+            background-color: #007BFF;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
         table {
             width: 100%;
             border-collapse: collapse;
@@ -192,11 +230,11 @@
         }
 
         .overdue {
-            background-color: #ffcccc;
+            background-color: #ffcccc !important;
         }
 
         .exceed-lent {
-            background-color: #ffeb99;
+            background-color: #fff3cd !important;
         }
 
         .modal {
@@ -213,12 +251,19 @@
         }
 
         .modal-content {
-            background-color: #fefefe;
+            background-color: #fff;
             margin: 5% auto;
-            padding: 20px;
-            border: 1px solid #888;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
             width: 80%;
             max-width: 600px;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
         }
 
         .close {

@@ -1,17 +1,14 @@
-import datetime
 import base64
-
-#import app
-import bcrypt
-from flask import Flask, render_template,jsonify, request, redirect, url_for, flash, session
-from flask_mysqldb import MySQL
-from datetime import datetime
-import time
-import MySQLdb.cursors
-from werkzeug.utils import secure_filename
+import datetime
 import os
+import time
+from datetime import datetime
 
-
+import MySQLdb.cursors
+# import app
+from flask import Flask, render_template, jsonify, request, redirect, url_for, flash
+from flask_mysqldb import MySQL
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__, static_folder='static')
 
@@ -22,6 +19,7 @@ app.config['MYSQL_HOST'] = 'localhost'
 app.config['MYSQL_USER'] = 'dbadmin'
 app.config['MYSQL_PASSWORD'] = 'Jheyan061709'
 app.config['MYSQL_DB'] = 'library'
+
 
 
 # File Upload Configuration
@@ -135,6 +133,7 @@ def inject_admin():
             return {'name': name, 'photo': photo}
 
     return {'name': "Guest", 'photo': "default.png"}  # Default values when no admin is logged in
+
 
 
 @app.route('/dashboard-data')
@@ -540,10 +539,6 @@ def get_reader_status(reader_id):
     else:
         return jsonify({"status": "inactive"})  # Return 'inactive' if reader does not exist
 
-import uuid
-
-
-
 
 @app.route('/issue_books', methods=['POST'])
 def issue_books():
@@ -702,6 +697,7 @@ def get_logged_in_admin():
         return jsonify({"error": "Admin not logged in"}), 401
 
 
+
 @app.route('/update_fine_status', methods=['POST'])
 def update_fine_status():
     data = request.json
@@ -722,36 +718,65 @@ def update_fine_status():
 
     return jsonify({"message": "Fine status updated successfully!"}), 200
 
+@app.route('/fetch_book_price', methods=['GET'])
+def fetch_book_price():
+    book_id = request.args.get('book_id')
+    if not book_id:
+        return jsonify({'error': 'Book ID is required'}), 400
+
+    # Fetch book amount from the database
+    cur = mysql.connection.cursor()
+    cur.execute("SELECT book_amount FROM book WHERE book_id = %s", (book_id,))
+    book = cur.fetchone()
+
+    if book:
+        return jsonify({'book_amount': book[0]})
+    else:
+        return jsonify({'error': 'Book not found'}), 404
 
 @app.route('/fetch_issued', methods=['GET'])
 def fetch_issued():
     search_query = request.args.get('search', '')
+    filter_overdue = request.args.get('overdue') == 'true'
+    filter_exceed_lent = request.args.get('exceed_lent') == 'true'
+
     cur = mysql.connection.cursor()
 
-    query = """
-    SELECT issued.issued_number, issued.reader_id, reader.name, issued.book_id, 
-           book.title, issued.start_date, issued.return_date, issued.transaction_id, reader.status
-    FROM issued
-    JOIN reader ON issued.reader_id = reader.reader_id
-    JOIN book ON issued.book_id = book.book_id
-    WHERE reader.name LIKE %s OR issued.reader_id LIKE %s
-    ORDER BY issued.issued_number DESC
+    base_query = """
+        SELECT issued.issued_number, issued.reader_id, reader.name, issued.book_id, 
+               book.title, issued.start_date, issued.return_date, issued.transaction_id,
+               reader.status,
+               (SELECT COUNT(*) FROM issued i2 WHERE i2.reader_id = issued.reader_id) AS total_borrowed
+        FROM issued
+        JOIN reader ON issued.reader_id = reader.reader_id
+        JOIN book ON issued.book_id = book.book_id
+        WHERE (reader.name LIKE %s OR issued.reader_id LIKE %s)
     """
 
-    try:
-        cur.execute(query, (f"%{search_query}%", f"%{search_query}%"))
-        issued_books = cur.fetchall()
+    # Append conditions for filters
+    conditions = []
+    if filter_overdue:
+        conditions.append("issued.return_date < CURDATE()")
+    if filter_exceed_lent:
+        conditions.append("reader.status = 'inactive'")
 
+    if conditions:
+        base_query += " AND " + " AND ".join(conditions)
+
+    base_query += " ORDER BY issued.issued_number DESC"
+
+    try:
+        cur.execute(base_query, (f"%{search_query}%", f"%{search_query}%"))
+        issued_books = cur.fetchall()
         if not issued_books:
             return jsonify({"message": "No records found matching the search criteria."}), 404
-
     except Exception as e:
         print(f"Error fetching issued books: {e}")
         return jsonify({"error": "An error occurred while fetching issued books."}), 500
     finally:
         cur.close()
 
-    # Convert tuples to list of dictionaries
+    # Return as JSON
     issued_books_list = [
         {
             "issued_number": row[0],
@@ -761,13 +786,14 @@ def fetch_issued():
             "title": row[4],
             "start_date": row[5].strftime('%Y-%m-%d'),
             "return_date": row[6].strftime('%Y-%m-%d'),
-            "transaction_id": row[7]
+            "transaction_id": row[7],
+            "status": row[8],
+            "total_borrowed": row[9]
         }
         for row in issued_books
     ]
 
     return jsonify(issued_books_list)
-
 
 @app.route('/fetch_transaction_details', methods=['GET'])
 def fetch_transaction_details():
@@ -834,6 +860,7 @@ def list_issued():
 
 @app.route('/return')
 def return_books():
+    admin_id = session.get('admin_id')
     return render_template('return.html')
 
 
@@ -848,7 +875,8 @@ def fetch_return():
     FROM issued i
     JOIN reader r ON i.reader_id = r.reader_id
     JOIN book b ON i.book_id = b.book_id
-    WHERE r.name LIKE %s OR r.reader_id LIKE %s;
+    WHERE (r.name LIKE %s OR r.reader_id LIKE %s)
+    AND i.issued_number NOT IN (SELECT issued_number FROM return_book)
     """
     cur.execute(query, (f"%{search_query}%", f"%{search_query}%"))
     data = cur.fetchall()
@@ -868,15 +896,23 @@ def fetch_return():
         })
     return jsonify(issued_books)
 
-
-from datetime import datetime
-import time  # Import the time module
+from flask import session
 
 @app.route('/process_return', methods=['POST'])
 def process_return():
     try:
         data = request.get_json()
         issued_number = data.get('issued_number')
+        book_condition = data.get('book_condition', 'good')  # Default to 'good'
+        fine_type = data.get('fine_type', 'overdue')  # Default to 'overdue'
+        fine_amount = float(data.get('fine_amount', 0.00))  # Default to 0.00
+        fine_status = data.get('fine_status', 'unpaid')  # Default to 'unpaid'
+
+        # Ensure the admin is logged in (using session)
+        admin_id = session.get('admin_id')
+        if not admin_id:
+            return jsonify({'error': 'Admin not logged in'}), 401  # Unauthorized
+
         cur = mysql.connection.cursor()
 
         # Fetch issued book details
@@ -889,23 +925,52 @@ def process_return():
         reader_id, book_id, return_date = issued_data
 
         # Ensure return_date is today's date when returned
-        today_date = datetime.today().date()  # Use the correct method to get today's date
+        today_date = datetime.today().date()
 
-        # Calculate exceed days (if any)
+        # Handle return_date (ensure it is a date object)
         if isinstance(return_date, str):
             return_date = datetime.strptime(return_date, '%Y-%m-%d').date()
 
+        # Calculate exceed days (if any)
         exceed_days = max(0, (today_date - return_date).days)
-        fine = exceed_days * 50
 
-        # Insert into return_book table, with today's date as return_date
+        # Fine Calculation based on fine type
+        if fine_type == 'overdue':
+            fine = exceed_days * 50
+            print(f"Overdue fine calculated: {fine} for {exceed_days} exceed days.")  # Debugging line
+        elif fine_type == 'lost':
+            # Fetch book price for lost fine
+            cur.execute("SELECT book_amount FROM book WHERE book_id = %s", (book_id,))
+            book_data = cur.fetchone()
+            if book_data:
+                fine = book_data[0]  # Assuming book_amount is a field in book table
+                print(f"Lost fine calculated: {fine} from book price.")  # Debugging line
+            else:
+                fine = 0  # Default to 0 if book_amount not found
+                print("No book price found, fine set to 0.")  # Debugging line
+        elif fine_type == 'damaged':
+            fine = 100  # Fixed fine for damaged books
+            print(f"Damaged fine set: {fine}")  # Debugging line
+        else:
+            fine = 0  # Default to 0 for other cases
+            print("No fine type matched, fine set to 0.")  # Debugging line
+
+        # Insert into return_book table
         cur.execute(""" 
-            INSERT INTO return_book (reader_id, book_id, issued_number, return_date, exceed_days, fine) 
-            VALUES (%s, %s, %s, %s, %s, %s)
-        """, (reader_id, book_id, issued_number, today_date, exceed_days, fine))
+            INSERT INTO return_book (issued_number, reader_id, book_id, return_date, book_condition, 
+                                     fine_type, fine_amount, fine_status, processed_by) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (issued_number, reader_id, book_id, today_date, book_condition, fine_type, fine, fine_status, admin_id))
 
-        # Remove from issued table
-        cur.execute("DELETE FROM issued WHERE issued_number = %s", (issued_number,))
+        # Fetch the return_id generated by the insert query
+        cur.execute("SELECT LAST_INSERT_ID()")
+        return_id = cur.fetchone()[0]
+
+        # Update the available quantity in the book table
+        cur.execute("UPDATE book SET available_qnty = available_qnty + 1 WHERE book_id = %s", (book_id,))
+
+        # Update the lend_book count in the reader table
+        cur.execute("UPDATE reader SET lend_book = lend_book - 1 WHERE reader_id = %s", (reader_id,))
 
         # Commit changes to the database
         mysql.connection.commit()
@@ -918,41 +983,69 @@ def process_return():
         cur.execute("SELECT title FROM book WHERE book_id = %s", (book_id,))
         book_data = cur.fetchone()
         book_title = book_data[0] if book_data else "Unknown"
-        # Update the available quantity in the book table
-        cur.execute("UPDATE book SET available_qnty = available_qnty + 1 WHERE book_id = %s", (book_id,))
 
-        # Update the lend_book count in the reader table
-        cur.execute("UPDATE reader SET lend_book = lend_book - 1 WHERE reader_id = %s", (reader_id,))
 
-        # Generate receipt data
-        receipt_data = {
-            "transaction_id": str(int(time.time())),  # Use time.time() from the time module for unique ID
+        # Fetch admin name
+        cur.execute("SELECT name FROM admin WHERE admin_id = %s", (admin_id,))
+        admin_data = cur.fetchone()
+        admin_name = admin_data[0] if admin_data else "Unknown"
+
+        # Fetch reader contact
+        cur.execute("SELECT contact_number FROM reader WHERE reader_id = %s", (reader_id,))
+        contact_data = cur.fetchone()
+        reader_contact = contact_data[0] if contact_data else "Unknown"
+
+
+
+        # Store return receipt details in session after processing
+        session['return_receipt_data'] = {
+            "return_id": return_id,
+            "transaction_id": "T" + str(return_id),  # You can generate a custom transaction ID here
+            "admin": {
+                "id": admin_id,
+                "name": admin_name
+            },
             "reader": {
                 "id": reader_id,
                 "name": reader_name,
+                "contact": reader_contact
             },
             "book": {
-                "title": book_title,
-                "issued_number": issued_number
+                "title": book_title
             },
-            "return_date": today_date,
-            "exceed_days": exceed_days,
-            "fine": fine
+            "return_date": return_date,
+            "fine_details": {
+                "amount": fine,
+                "type": fine_type,
+                "status": fine_status
+            }
         }
 
-        # Return a response with receipt data
+        # Optional: return JSON to trigger frontend opening return_receipt
         return jsonify({
-            'message': 'Book returned successfully',
-            'receipt': receipt_data
+            "receipt_url": "/return_receipt",
+            "receipt": session['return_receipt_data']
         })
 
     except Exception as e:
         # Rollback in case of an error
         mysql.connection.rollback()
 
-        print(f"Error occurred: {str(e)}")  # Log the error
+        print(f"Error occurred during return processing: {str(e)}")  # Log the error
 
-        return jsonify({'error': 'An error occurred while processing the return. Please try again.'}), 500
+        return jsonify({'error': 'An error occurred: ' + str(e)}), 500
+
+
+@app.route('/return_receipt')
+def return_receipt():
+    receipt_data = session.get('return_receipt_data')  # Retrieve data from the session
+    if not receipt_data:
+        return "No return receipt data available", 400  # Return an error if no data found
+    return render_template('return_receipt.html', receipt=receipt_data)  # Pass the data to the template
+
+
+
+
 
 if __name__ == '__main__':
     app.run(debug=True)
