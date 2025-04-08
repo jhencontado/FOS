@@ -11,19 +11,19 @@
         <!-- Left Section -->
         <div class="left-section">
             <div class="overlay">
-
                 <h2>Libraries are the heart of the community,<br>
                     a place where people come together<br>
-                        to learn, share, and grow.</h2>
-
-
-
+                    to learn, share, and grow.</h2>
+                <img src="{{ url_for('static', filename='image/WHITE LOGO.PNG') }}" width="300" alt="Logo" class="logo-hover">
+            </div>
+        </div>
 
         <!-- Right Section (Login Form) -->
         <div class="right-section">
             <div class="login-box">
                 <h3 class="logo">
-                    <img src="{{ url_for('static', filename='image/logo.jpg') }}" width="150" alt="Logo"></h3>
+                    <img src="{{ url_for('static', filename='image/logo.jpg') }}" width="100" alt="Logo">
+                </h3>
                 <h4>Log Into Your Account</h4>
                 <form action="/login" method="POST">
                     <label>Username</label>
@@ -32,14 +32,11 @@
                     <input type="password" name="password" required placeholder="Enter password">
                     <button type="submit">Sign In</button>
 
-                <h1>Don't have an account?</h1>
+                    <h1>Don't have an account?</h1>
                     <a href="/register">Register here</a>
                 </form>
-                </div>
             </div>
         </div>
-            </div>
     </div>
-</div>
 </body>
 </html>

@@ -6,7 +6,6 @@
     <title>Manage Books</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-
 </head>
 <body>
 
@@ -16,16 +15,16 @@
     <h1>Manage Books</h1>
 
     <!-- Search Form & Add Book Button -->
-    <form id="searchForm">
+    <form id="searchForm" class="mb-4">
         <input type="text" id="searchQuery" name="search" placeholder="Search by title, author, or genre" value="{{ search_query }}">
-        <button type="submit">Search</button>
-        <button type="button" id="openAddBookModal">
+        <button type="submit" class="btn btn-search"><i class="fas fa-search" ></i>Search</button>
+        <button type="button" id="openAddBookModal" class="btn btn-add">
             <i class="fas fa-plus"></i> Add Book
         </button>
     </form>
 
     <!-- Book Table -->
-    <table border="1">
+    <table class="table">
         <thead>
             <tr>
                 <th>Cover</th>
@@ -43,12 +42,7 @@
         <tbody id="bookTable">
             {% if books %}
                 {% for book in books %}
-                <tr data-id="{{ book.book_id }}" data-title="{{ book.title }}"
-                    data-author="{{ book.author }}" data-genre="{{ book.genre }}"
-                    data-publisher="{{ book.publisher }}" data-year="{{ book.year_publish }}"
-                    data-isbn="{{ book.ISBN }}" data-available="{{ book.available_qnty }}"
-                    data-book-amount="{{ book.book_amount }}">  <!-- Add this line -->
-
+                <tr data-id="{{ book.book_id }}">
                     <td>
                         {% if book.image %}
                             <img src="{{ url_for('static', filename='image/' + book.image) }}" alt="Book Cover" width="50">
@@ -65,14 +59,14 @@
                     <td>{{ book.available_qnty }}</td>
                     <td>{{ book.book_amount }}</td>
                     <td>
-                        <button class="edit-btn"><i class="fas fa-edit"></i></button>
-                        <button class="delete-btn"><i class="fas fa-trash"></i></button>
+                        <button class="edit-btn" aria-label="Edit"><i class="fas fa-edit"></i></button>
+                        <button class="delete-btn" aria-label="Delete"><i class="fas fa-trash"></i></button>
                     </td>
                 </tr>
                 {% endfor %}
             {% else %}
                 <tr>
-                    <td colspan="9">No books available</td>
+                    <td colspan="10">No books available</td>
                 </tr>
             {% endif %}
         </tbody>
@@ -80,41 +74,44 @@
 </div>
 
 <!-- Add Book Modal -->
-<div id="addBookModal" style="display: none;">
-    <h2>Add a New Book</h2>
-     <form id="addBookForm" enctype="multipart/form-data">
-        <input type="text" name="title" placeholder="Title" required>
-        <input type="text" name="author" placeholder="Author" required>
-        <input type="text" name="genre" placeholder="Genre">
-        <input type="text" name="publisher" placeholder="Publisher">
-        <input type="number" name="year_publish" placeholder="Year" required>
-        <input type="text" name="ISBN" placeholder="ISBN" required>
-        <input type="number" name="available_qnty" placeholder="Available Quantity" required>
-         <input type="number" name="book_amount" placeholder="Book Amount" required>  <!-- NEW FIELD -->
-        <input type="file" name="image">
-        <button type="submit">Save Book</button>
-        <button type="button" id="closeAddBookModal">Cancel</button>
-    </form>
+<div id="addBookModal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <h2>Add a New Book</h2>
+        <form id="addBookForm" enctype="multipart/form-data">
+            <input type="text" name="title" placeholder="Title" required>
+            <input type="text" name="author" placeholder="Author" required>
+            <input type="text" name="genre" placeholder="Genre">
+            <input type="text" name="publisher" placeholder="Publisher">
+            <input type="number" name="year_publish" placeholder="Year" required>
+            <input type="text" name="ISBN" placeholder="ISBN" required>
+            <input type="number" name="available_qnty" placeholder="Available Quantity" required>
+            <input type="number" name="book_amount" placeholder="Book Amount" required>
+            <input type="file" name="image">
+            <button type="submit">Save Book</button>
+            <button type="button" id="closeAddBookModal">Cancel</button>
+        </form>
+    </div>
 </div>
 
-
 <!-- Edit Book Modal -->
-<div id="editBookModal" style="display: none;">
-    <h2>Edit Book</h2>
-    <form id="editBookForm">
-        <input type="hidden" name="book_id" id="editBookId">
-        <input type="text" name="title" id="editTitle" placeholder="Title" required>
-        <input type="text" name="author" id="editAuthor" placeholder="Author" required>
-        <input type="text" name="genre" id="editGenre" placeholder="Genre">
-        <input type="text" name="publisher" id="editPublisher" placeholder="Publisher">
-        <input type="number" name="year_publish" id="editYearPublish" placeholder="Year" required>
-        <input type="text" name="ISBN" id="editISBN" placeholder="ISBN" required>
-        <input type="number" name="available_qnty" id="editAvailable" placeholder="Available Quantity" required>
-        <input type="number" name="book_amount" id="editBookAmount" placeholder="Book Amount" required>
-        <input type="file" name="image" id="editImage">
-        <button type="submit">Update Book</button>
-        <button type="button" id="closeEditBookModal">Cancel</button>
-    </form>
+<div id="editBookModal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <h2>Edit Book</h2>
+        <form id="editBookForm">
+            <input type="hidden" name="book_id" id="editBookId">
+            <input type="text" name="title" id="editTitle" placeholder="Title" required>
+            <input type="text" name="author" id="editAuthor" placeholder="Author" required>
+            <input type="text" name="genre" id="editGenre" placeholder="Genre">
+            <input type="text" name="publisher" id="editPublisher" placeholder="Publisher">
+            <input type="number" name="year_publish" id="editYearPublish" placeholder="Year" required>
+            <input type="text" name="ISBN" id="editISBN" placeholder="ISBN" required>
+            <input type="number" name="available_qnty" id="editAvailable" placeholder="Available Quantity" required>
+            <input type="number" name="book_amount" id="editBookAmount" placeholder="Book Amount" required>
+            <input type="file" name="image" id="editImage">
+            <button type="submit">Update Book</button>
+            <button type="button" id="closeEditBookModal">Cancel</button>
+        </form>
+    </div>
 </div>
 
 

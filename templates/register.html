@@ -38,219 +38,73 @@
 <body class="bg-light" onload="startCamera()">
 
 <div class="container mt-5">
-    <div class="row">
-        <div class="col-md-6 offset-md-3">
-            <h3 class="text-center">Admin Registration</h3>
+    <div class="register">
+        <div class="logo">
+            <img src="{{ url_for('static', filename='image/logo.jpg') }}" width="100" alt="BookLight Logo">
+          </div>
+        <h3 class="text-center">Admin Registration</h3>
 
-            <!-- Flash Messages -->
-            {% with messages = get_flashed_messages() %}
-                {% if messages %}
-                    <div class="alert alert-info">{{ messages[0] }}</div>
-                {% endif %}
-            {% endwith %}
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <div class="alert alert-info">{{ messages[0] }}</div>
+            {% endif %}
+        {% endwith %}
 
-            <div class="text-center">
-                <img src="{{ url_for('static', filename='image/logo.jpg') }}" width="100" alt="BookLight Logo">
+        <div class="text-center">
+
+        </div>
+
+        <form action="/register" method="POST">
+            <div class="mb-3">
+                <label class="form-label">Name</label>
+                <input type="text" class="form-control" name="name" required>
             </div>
-
-            <!-- Registration Form -->
-            <form action="/register" method="POST">
-                <div class="mb-3">
-                    <label class="form-label">Name</label>
-                    <input type="text" class="form-control" name="name" required>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Contact Number</label>
-                    <input type="text" class="form-control" name="contact_number" required>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Email</label>
-                    <input type="email" class="form-control" name="email" required>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Username</label>
-                    <input type="text" class="form-control" name="username" required>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Password</label>
-                    <input type="password" class="form-control" name="password" required>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Role</label>
-                    <select class="form-control" name="role" required>
-                        <option value="Librarian">Librarian</option>
-                        <option value="Manager">Manager</option>
-                        <option value="Staff" selected>Staff</option>
-                    </select>
-                </div>
-
-                <!-- Webcam Capture -->
-                <div class="mb-3 text-center">
-                    <video id="webcam" width="200" height="150" autoplay></video>
-                    <canvas id="canvas" width="200" height="150" style="display: none;"></canvas>
-                    <br>
-                    <button type="button" class="btn btn-primary mt-2" onclick="captureImage()">Capture Image</button>
-                    <input type="hidden" name="photo" id="photo">
-                </div>
-
-                <!-- Preview Captured Image -->
-                <div class="mb-3 text-center">
-                    <img id="preview" src="#" alt="Captured Image" style="display: none; width: 200px; height: 150px; border: 1px solid #ccc;">
-                </div>
-
+            <div class="mb-3">
+                <label class="form-label">Contact Number</label>
+                <input type="text" class="form-control" name="contact_number" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Email</label>
+                <input type="email" class="form-control" name="email" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Username</label>
+                <input type="text" class="form-control" name="username" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Password</label>
+                <input type="password" class="form-control" name="password" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Role</label>
+                <select class="form-control" name="role" required>
+                    <option value="Librarian">Librarian</option>
+                    <option value="Manager">Manager</option>
+                    <option value="Staff" selected>Staff</option>
+                </select>
+            </div>
+            <div class="reg">
                 <button type="submit" class="btn btn-success w-100">Register</button>
-            </form>
+            </div>
+        </form>
 
-            <!-- Back to Login -->
-            <p class="text-center mt-3"><a href="/">Back to Login</a></p>
+        <p class="text-center mt-3"><a href="/">Back to Login</a></p>
+    </div>
+
+    <!-- Webcam Column -->
+    <div>
+        <div class="cimage">
+            <video id="webcam" width="200" height="150" autoplay></video>
+            <canvas id="canvas" width="200" height="150" style="display: none;"></canvas>
+            <button type="button" onclick="captureImage()">Capture Image</button>
+            <input type="hidden" name="photo" id="photo">
+        </div>
+
+        <div class="capture">
+            <img id="preview" src="#" alt="Captured Image" style="display: none; width: 200px; height: 150px; border: 1px solid #ccc;">
         </div>
     </div>
 </div>
 
-
-<script>
-document.addEventListener("DOMContentLoaded", function () {
-    // Show Edit Modal with Data
-    function editReader(id, name, contact, refId, address, email) {
-        console.log(id, name, contact, refId, address, email);  // Log to verify data
-
-        const modal = document.getElementById("editModal");
-
-        if (modal) {
-            document.getElementById("editReaderId").value = id;
-            document.getElementById("editName").value = name;
-            document.getElementById("editContactNumber").value = contact;
-            document.getElementById("editReferenceId").value = refId;
-            document.getElementById("editAddress").value = address;
-            document.getElementById("editEmail").value = email;
-
-            modal.style.display = "block";  // Open the modal
-
-            console.log("Edit Modal is now visible.");
-        } else {
-            console.error("Edit Modal not found.");
-        }
-    }
-
-    // Close Edit Modal
-    function closeEditModal() {
-        const modal = document.getElementById("editModal");
-        if (modal) modal.style.display = "none";
-    }
-
-    // Attach event listener to edit form (only if it exists)
-    const editForm = document.getElementById("editReaderForm");
-    if (editForm) {
-        editForm.addEventListener("submit", function (event) {
-            event.preventDefault();  // Prevent default form submission
-
-            const formData = new FormData(this);
-
-            fetch("/update_reader", {
-                method: "POST",
-                body: formData,
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.message) {
-                    alert(data.message);
-                    location.reload();  // Reload to show updated data
-                } else {
-                    alert("Error: " + data.error);
-                }
-            })
-            .catch(error => {
-                console.error("Error updating reader:", error);
-            });
-        });
-    }
-
-    // Open Register Reader Modal
-    function openRegisterModal() {
-        const modal = document.getElementById("registerReaderModal");
-        if (modal) modal.style.display = "block";
-    }
-
-    // Close Register Reader Modal
-    function closeRegisterModal() {
-        const modal = document.getElementById("registerReaderModal");
-        if (modal) modal.style.display = "none";
-    }
-
-    // Attach event listener to register form (only if it exists)
-    const registerForm = document.getElementById("registerReaderForm");
-    if (registerForm) {
-        registerForm.addEventListener("submit", function (event) {
-            event.preventDefault();  // Prevent the form from submitting the default way
-
-            const formData = new FormData(this);
-
-            fetch("/add_reader", {
-                method: "POST",
-                body: formData,
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.message) {
-                    alert(data.message);
-                    closeRegisterModal();  // Close the modal after successful submission
-                    location.reload();  // Refresh the page to show new reader
-                } else {
-                    alert("Error: " + data.error);
-                }
-            })
-            .catch(error => {
-                console.error("Error registering reader:", error);
-            });
-        });
-    }
-
-    // Delete Reader
-    function deleteReader(readerId) {
-        if (confirm("Are you sure you want to delete this reader?")) {
-            fetch(`/delete_reader/${readerId}`, { method: "POST" })  // Fixed template literal syntax
-            .then(response => {
-                if (response.ok) {
-                    location.reload(); // Refresh page after deletion
-                } else {
-                    alert("Failed to delete reader.");
-                }
-            })
-            .catch(error => console.error("Error deleting reader:", error));
-        }
-    }
-
-    // Handle Search
-    function searchReader() {
-        const query = document.getElementById("searchQuery").value.toLowerCase();
-        const rows = document.querySelectorAll("#readersTable tbody tr");  // Target tbody rows only
-
-        rows.forEach(row => {
-            const name = row.cells[1]?.textContent.toLowerCase() || "";
-            const contact = row.cells[2]?.textContent.toLowerCase() || "";
-            const reference = row.cells[3]?.textContent.toLowerCase() || "";
-
-            if (name.includes(query) || contact.includes(query) || reference.includes(query)) {
-                row.style.display = "";
-            } else {
-                row.style.display = "none";
-            }
-        });
-    }
-
-    // Attach search function to input event (only if search input exists)
-    const searchInput = document.getElementById("searchQuery");
-    if (searchInput) {
-        searchInput.addEventListener("input", searchReader);
-    }
-
-    // Expose functions globally for inline HTML event calls
-    window.editReader = editReader;
-    window.closeEditModal = closeEditModal;
-    window.openRegisterModal = openRegisterModal;
-    window.closeRegisterModal = closeRegisterModal;
-    window.deleteReader = deleteReader;
-});
-</script>
 </body>
 </html>

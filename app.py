@@ -6,7 +6,7 @@ from datetime import datetime
 
 import MySQLdb.cursors
 # import app
-from flask import Flask, render_template, jsonify, request, redirect, url_for, flash
+from flask import Flask, render_template, jsonify, request, redirect, url_for, flash, session
 from flask_mysqldb import MySQL
 from werkzeug.utils import secure_filename
 
@@ -28,8 +28,7 @@ os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 
 
 mysql = MySQL(app)
-#today_date = datetime.date.today()
-#app.secret_key = 'your_secret_key'
+
 
 @app.route('/home')
 def home():
@@ -136,55 +135,91 @@ def inject_admin():
 
 
 
+from MySQLdb.cursors import DictCursor
+
 @app.route('/dashboard-data')
 def dashboard_data():
-    if 'admin_id' in session:
-        cur = mysql.connection.cursor(DictCursor)
+    if 'admin_id' not in session:
+        return jsonify({"error": "Unauthorized"}), 401
 
-        # Get the stats for the dashboard
-        cur.execute("SELECT COUNT(*) FROM reader WHERE status = 'active'")
-        registered_readers = cur.fetchone()['COUNT(*)']
+    cur = mysql.connection.cursor(DictCursor)
 
-        cur.execute("SELECT COUNT(*) FROM book")
-        total_books = cur.fetchone()['COUNT(*)']
+    # Get basic stats
+    cur.execute("SELECT COUNT(*) AS count FROM reader")
+    registered_readers = cur.fetchone()['count']
 
-        cur.execute("SELECT COUNT(*) FROM issued WHERE return_date IS NULL")
-        issued_books = cur.fetchone()['COUNT(*)']
+    cur.execute("SELECT COUNT(*) AS count FROM book")
+    total_books = cur.fetchone()['count']
 
-        cur.execute("SELECT COUNT(*) FROM issued WHERE return_date IS NOT NULL AND return_date < CURDATE()")
-        overdue_books = cur.fetchone()['COUNT(*)']
+    # Books currently issued = records in `issued` with no match in `return_book`
+    cur.execute("""
+        SELECT COUNT(*) AS count
+        FROM issued i
+        LEFT JOIN return_book r ON i.issued_number = r.issued_number
+        WHERE r.issued_number IS NULL
+    """)
+    issued_books = cur.fetchone()['count']
 
-        # Get the latest readers
-        cur.execute(
-            "SELECT reader_id as id, name, contact_number as contact, email FROM reader ORDER BY reader_id DESC LIMIT 5")
-        readers = cur.fetchall()
+    # Overdue = not returned AND return_date is past today
+    cur.execute("""
+        SELECT COUNT(*) AS count
+        FROM issued i
+        LEFT JOIN return_book r ON i.issued_number = r.issued_number
+        WHERE r.issued_number IS NULL AND i.return_date < CURDATE()
+    """)
+    overdue_books = cur.fetchone()['count']
 
-        # Get the latest books
-        cur.execute(
-            "SELECT book_id as id, title, author, available_qnty as available FROM book ORDER BY book_id DESC LIMIT 5")
-        books = cur.fetchall()
+    # Latest readers
+    cur.execute("""
+        SELECT reader_id AS id, name, contact_number AS contact, email
+        FROM reader
+        WHERE status = 'active'
+        ORDER BY reader_id DESC
+        LIMIT 5
+    """)
+    readers = cur.fetchall()
 
-        # Get top picks books (use top-rated or most issued books as an example)
-        cur.execute("SELECT title, image FROM book WHERE available_qnty > 0 ORDER BY book_id DESC LIMIT 5")
-        top_books = cur.fetchall()
+    # Latest books
+    cur.execute("""
+        SELECT book_id AS id, title, author, available_qnty AS available
+        FROM book
+        ORDER BY book_id DESC
+        LIMIT 5
+    """)
+    books = cur.fetchall()
 
-        cur.close()
+    # Top picks
+    cur.execute("""
+        SELECT title, image
+        FROM book
+        WHERE available_qnty > 0
+        ORDER BY book_id DESC
+        LIMIT 8
+    """)
+    top_books = cur.fetchall()
 
-        # Send all the data to the frontend
-        return jsonify({
-            'registeredReaders': registered_readers,
-            'totalBooks': total_books,
-            'issuedBooks': issued_books,
-            'overdueBooks': overdue_books,
-            'readers': readers,
-            'books': books,
-            'topBooks': top_books
-        })
+    cur.close()
 
-    return jsonify({"error": "Unauthorized"}), 401
+    # Optional debug
+    print("Dashboard Data:", {
+        'registeredReaders': registered_readers,
+        'totalBooks': total_books,
+        'issuedBooks': issued_books,
+        'overdueBooks': overdue_books,
+        'readers': readers,
+        'books': books,
+        'topBooks': top_books
+    })
 
-
-from MySQLdb.cursors import DictCursor
+    return jsonify({
+        'registeredReaders': registered_readers,
+        'totalBooks': total_books,
+        'issuedBooks': issued_books,
+        'overdueBooks': overdue_books,
+        'readers': readers,
+        'books': books,
+        'topBooks': top_books
+    })
 
 @app.route('/dashboard')
 def dashboard():
@@ -466,6 +501,14 @@ def update_reader():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route('/get_reader/<int:reader_id>')
+def get_reader(reader_id):
+    cursor = mysql.connection.cursor()
+    cursor.execute("SELECT * FROM reader WHERE reader_id = %s", (reader_id,))
+    reader = cursor.fetchone()
+    cursor.close()
+    return jsonify(reader)
+
 @app.route('/deactivate_reader/<int:reader_id>', methods=['POST'])
 def deactivate_reader(reader_id):
     cursor = mysql.connection.cursor()
@@ -511,17 +554,24 @@ def search_reader():
             return jsonify({'error': 'An error occurred while fetching reader data'}), 500
     return jsonify([])  # Return an empty list if no query is provided
 
-
 @app.route('/fetch_books', methods=['GET'])
 def fetch_books():
     cur = mysql.connection.cursor()
-    cur.execute("SELECT book_id, title FROM book WHERE available_qnty > 0")
+    cur.execute("SELECT book_id, title, author, image FROM book WHERE available_qnty > 0")
     books = cur.fetchall()
     cur.close()
 
-    # Return books as JSON
-    return jsonify([{'book_id': book[0], 'title': book[1]} for book in books])
+    # Manually map MySQL rows to dictionaries if needed
+    book_list = []
+    for book in books:
+        book_list.append({
+            'book_id': book[0],
+            'title': book[1],
+            'author': book[2],
+            'image': book[3]
+        })
 
+    return jsonify(book_list)
 
 @app.route('/get_reader_status/<int:reader_id>', methods=['GET'])
 def get_reader_status(reader_id):
@@ -751,6 +801,11 @@ def fetch_issued():
         JOIN reader ON issued.reader_id = reader.reader_id
         JOIN book ON issued.book_id = book.book_id
         WHERE (reader.name LIKE %s OR issued.reader_id LIKE %s)
+        AND NOT EXISTS (
+            SELECT 1
+            FROM return_book rb
+            WHERE rb.issued_number = issued.issued_number
+        )
     """
 
     # Append conditions for filters
@@ -896,7 +951,6 @@ def fetch_return():
         })
     return jsonify(issued_books)
 
-from flask import session
 
 @app.route('/process_return', methods=['POST'])
 def process_return():
@@ -971,6 +1025,13 @@ def process_return():
 
         # Update the lend_book count in the reader table
         cur.execute("UPDATE reader SET lend_book = lend_book - 1 WHERE reader_id = %s", (reader_id,))
+
+        # Check if lend_book count is less than 5, update status to 'active'
+        cur.execute("SELECT lend_book FROM reader WHERE reader_id = %s", (reader_id,))
+        lend_book_count = cur.fetchone()
+
+        if lend_book_count and lend_book_count[0] < 5:
+            cur.execute("UPDATE reader SET status = 'active' WHERE reader_id = %s", (reader_id,))
 
         # Commit changes to the database
         mysql.connection.commit()
