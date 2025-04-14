@@ -10,14 +10,15 @@
 </head>
 <body>
     {% include "sidebar.html" %}
-    <div class="container">
-        <h2>Issued Books List</h2>
-        <input type="text" id="searchInput" placeholder="Search by Reader ID or Name">
-        <div>
+    <div class="content">
+        <h1>Issued Books List</h1>
+        <div class="search-filter-bar">
+            <input type="text" id="searchInput" placeholder="Search by Reader ID or Name" class="mb-4">
             <button id="filterOverdue">Overdue</button>
             <button id="filterExceedLent">Readers with 5+ Borrowed Books</button>
             <button id="showAll">Show All</button>
         </div>
+        <div class="table">
         <table>
             <thead>
                 <tr>
@@ -34,259 +35,270 @@
             <tbody id="issuedList"></tbody>
         </table>
     </div>
-
+    </div>
     <!-- Modal to view transaction details -->
-    <div id="transactionModal" class="modal">
-        <div class="modal-content">
+    <div id="transactionModal" class="modal-details">
+        <div class="modal-d-content">
             <span class="close">&times;</span>
-            <h3>Transaction Details</h3>
+            <h2>Transaction Details</h2>
             <div id="transactionDetails"></div>
         </div>
     </div>
 
     <script>
-        function fetchData(query = '', filterOverdue = false, filterExceedLent = false) {
-            $.ajax({
-                url: '/fetch_issued',
-                method: 'GET',
-                data: {
-                    search: query,
-                    overdue: filterOverdue,
-                    exceed_lent: filterExceedLent
-                },
-                success: function (data) {
-                    if (data.length === 0) {
-                        $('#issuedList').html('<tr><td colspan="8">No records found.</td></tr>');
-                        return;
+    function fetchData(query = '', filterOverdue = false, filterExceedLent = false) {
+        $.ajax({
+            url: '/fetch_issued',
+            method: 'GET',
+            data: {
+                search: query,
+                overdue: filterOverdue,
+                exceed_lent: filterExceedLent
+            },
+            success: function (data) {
+                if (data.length === 0) {
+                    $('#issuedList').html('<tr><td colspan="8">No records found.</td></tr>');
+                    return;
+                }
+
+                let tableContent = '';
+                const today = new Date();
+
+                data.forEach(item => {
+                    let rowClass = '';
+                    const returnDate = new Date(item.return_date);
+
+                    if (filterOverdue && returnDate < today) {
+                        rowClass += ' overdue';
+                    }
+                    if (filterExceedLent && item.total_borrowed >= 5) {
+                        rowClass += ' exceed-lent';
                     }
 
-                    let tableContent = '';
-                    const today = new Date();
+                    tableContent += `<tr class="${rowClass}">
+                        <td>${item.issued_number}</td>
+                        <td>${item.reader_id}</td>
+                        <td>${item.name}</td>
+                        <td>${item.book_id}</td>
+                        <td>${item.title}</td>
+                        <td>${item.start_date}</td>
+                        <td>${item.return_date}</td>
+                        <td><a href="#" class="transaction-link" data-transaction-id="${item.transaction_id}">${item.transaction_id}</a></td>
+                    </tr>`;
+                });
 
-                    data.forEach(item => {
-                        let rowClass = '';
-                        const returnDate = new Date(item.return_date);
-
-                        if (filterOverdue && returnDate < today) {
-                            rowClass += ' overdue';
-                        }
-                        if (filterExceedLent && item.total_borrowed >= 5) {
-                            rowClass += ' exceed-lent';
-                        }
-
-                        tableContent += `<tr class="${rowClass}">
-                            <td>${item.issued_number}</td>
-                            <td>${item.reader_id}</td>
-                            <td>${item.name}</td>
-                            <td>${item.book_id}</td>
-                            <td>${item.title}</td>
-                            <td>${item.start_date}</td>
-                            <td>${item.return_date}</td>
-                            <td><a href="#" class="transaction-link" data-transaction-id="${item.transaction_id}">${item.transaction_id}</a></td>
-                        </tr>`;
-                    });
-
-                    $('#issuedList').html(tableContent);
-                },
-                error: function () {
-                    $('#issuedList').html('<tr><td colspan="8">Error fetching records.</td></tr>');
-                }
-            });
-        }
-
-        $('#filterOverdue').on('click', function () {
-            fetchData('', true, false);
-        });
-
-        $('#filterExceedLent').on('click', function () {
-            fetchData('', false, true);
-        });
-
-        $('#showAll').on('click', function () {
-            $('#searchInput').val('');
-            fetchData();
-        });
-
-        $('#searchInput').on('keyup', function () {
-            let query = $(this).val();
-            fetchData(query);
-        });
-
-        // Open modal to view transaction details
-        $(document).on('click', '.transaction-link', function (e) {
-            e.preventDefault();
-            let transactionId = $(this).data('transaction-id');
-
-            $.ajax({
-                url: '/fetch_transaction_details',
-                method: 'GET',
-                data: { transaction_id: transactionId },
-                success: function (data) {
-                    let transactionDetails = `
-                        <h4>Reader Details:</h4>
-                        <img src="static/uploads/${data.reader.photo}" alt="Reader Photo" class="reader-photo">
-                        <p><strong>Name:</strong> ${data.reader.name}</p>
-                        <p><strong>Email:</strong> ${data.reader.email}</p>
-                        <p><strong>Contact:</strong> ${data.reader.contact_number}</p>
-                        <hr>
-                        <h4>Book Details:</h4>
-                        <p><strong>Title:</strong> ${data.book.title}</p>
-                        <p><strong>Author:</strong> ${data.book.author}</p>
-                        <p><strong>Genre:</strong> ${data.book.genre}</p>
-                        <p><strong>Publisher:</strong> ${data.book.publisher}</p>
-                        <hr>
-                        <h4>Issued Details:</h4>
-                        <p><strong>Admin ID:</strong> ${data.admin_id}</p>
-                        <p><strong>Start Date:</strong> ${data.start_date}</p>
-                        <p><strong>Return Date:</strong> ${data.return_date}</p>
-                        <p><strong>Transaction Number:</strong> ${data.transaction_id}</p>
-                    `;
-                    $('#transactionDetails').html(transactionDetails);
-                    $('#transactionModal').show();
-                }
-            });
-        });
-
-        // Close modal
-        $('.close').on('click', function () {
-            $('#transactionModal').hide();
-        });
-
-        $(window).on('click', function (event) {
-            if ($(event.target).is('#transactionModal')) {
-                $('#transactionModal').hide();
+                $('#issuedList').html(tableContent);
+            },
+            error: function () {
+                $('#issuedList').html('<tr><td colspan="8">Error fetching records.</td></tr>');
             }
         });
+    }
 
-        // Fetch initial data on page load
-        $(document).ready(function () {
-            fetchData();
+    $('#filterOverdue').on('click', function () {
+        fetchData('', true, false);
+    });
+
+    $('#filterExceedLent').on('click', function () {
+        fetchData('', false, true);
+    });
+
+    $('#showAll').on('click', function () {
+        $('#searchInput').val('');
+        fetchData();
+    });
+
+    $('#searchInput').on('keyup', function () {
+        let query = $(this).val();
+        fetchData(query);
+    });
+
+    // Open modal to view transaction details
+    $(document).on('click', '.transaction-link', function (e) {
+        e.preventDefault();
+        let transactionId = $(this).data('transaction-id');
+
+        $.ajax({
+            url: '/fetch_transaction_details',
+            method: 'GET',
+            data: { transaction_id: transactionId },
+            success: function (data) {
+                let transactionDetails = `
+                    <h4>Reader Details:</h4>
+                    <img src="static/uploads/${data.reader.photo}" alt="Reader Photo" class="reader-photo">
+                    <p><strong>Name:</strong> ${data.reader.name}</p>
+                    <p><strong>Email:</strong> ${data.reader.email}</p>
+                    <p><strong>Contact:</strong> ${data.reader.contact_number}</p>
+                    <hr>
+                    <h4>Book Details:</h4>
+                    <p><strong>Title:</strong> ${data.book.title}</p>
+                    <p><strong>Author:</strong> ${data.book.author}</p>
+                    <p><strong>Genre:</strong> ${data.book.genre}</p>
+                    <p><strong>Publisher:</strong> ${data.book.publisher}</p>
+                    <hr>
+                    <h4>Issued Details:</h4>
+                    <p><strong>Admin ID:</strong> ${data.admin_id}</p>
+                    <p><strong>Start Date:</strong> ${data.start_date}</p>
+                    <p><strong>Return Date:</strong> ${data.return_date}</p>
+                    <p><strong>Transaction Number:</strong> ${data.transaction_id}</p>
+                `;
+                $('#transactionDetails').html(transactionDetails);
+                $('#transactionModal').fadeIn();
+            }
         });
-    </script>
+    });
 
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f4f4;
-            margin: 0;
-            padding: 20px;
-            text-align: center;
-        }
+    // Close modal
+    $('.close').on('click', function () {
+        $('#transactionModal').fadeOut();
+    });
 
-        .container {
-            max-width: 900px;
-            margin: auto;
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+    $(window).on('click', function (event) {
+        if ($(event.target).is('#transactionModal')) {
+            $('#transactionModal').fadeOut();
         }
+    });
 
-        h2 {
-            color: #333;
-        }
+    // Fetch initial data on page load and ensure modal is hidden
+    $(document).ready(function () {
+        $('#transactionModal').hide();  // Ensures modal is hidden
+        fetchData();
+    });
+</script>
 
-        input {
-            width: 80%;
-            padding: 10px;
-            margin: 10px 0;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-        }
+<style>
 
-        button {
-            margin: 5px;
-            padding: 8px 12px;
-            border: none;
-            background-color: #007BFF;
-            color: white;
-            border-radius: 5px;
-            cursor: pointer;
-        }
 
-        button:hover {
-            background-color: #0056b3;
-        }
+h2 {
+  color: var(--primary-dark);
+  margin-bottom: 1rem;
+}
 
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
-        }
+input[type="text"] {
+  padding: 0.6rem;
+  width: 100%;
+  max-width: 350px;
+  margin-bottom: 1rem;
+  border: 1px solid var(--primary-dark);
+  border-radius: 0.5rem;
+}
 
-        th, td {
-            padding: 10px;
-            border: 1px solid #ddd;
-            text-align: left;
-        }
+.search-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  background-color: var(--primary-dark);
+  border-radius: 1rem;
+  margin-bottom: 1rem;
+  justify-content: space-between; /* Distributes the items to opposite ends */
+}
 
-        th {
-            background-color: #007BFF;
-            color: white;
-        }
+.search-filter-bar input[type="text"] {
+  flex: 1;
+  min-width: 200px;
+  padding: 0.6rem;
+  border: 1px solid var(--highlight);
+  border-radius: 0.5rem;
+  margin-right: 10px; /* Space before the line */
+}
 
-        tr:nth-child(even) {
-            background-color: #f9f9f9;
-        }
+.search-filter-bar input[type="text"]::after {
+  content: "";
+  display: block;
+  height: 100%;
+  width: 2px;
+  background-color: orange; /* Orange line */
+  margin-left: 10px;
+}
 
-        .overdue {
-            background-color: #ffcccc !important;
-        }
+.search-filter-bar button {
+  padding: 10px 16px;
+  background-color: var(--primary-dark);
+  color: var(--white);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
 
-        .exceed-lent {
-            background-color: #fff3cd !important;
-        }
+.search-filter-bar button:hover {
+  background-color: var(--highlight);
+}
 
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-            overflow: auto;
-            padding-top: 60px;
-        }
+a.transaction-link {
+  color: var(--highlight);
+  text-decoration: none;
+  font-weight: bold;
+}
 
-        .modal-content {
-            background-color: #fff;
-            margin: 5% auto;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-            width: 80%;
-            max-width: 600px;
-            animation: fadeIn 0.3s ease;
-        }
+a.transaction-link:hover {
+  text-decoration: underline;
 
-        @keyframes fadeIn {
-            from { opacity: 0; transform: scale(0.95); }
-            to { opacity: 1; transform: scale(1); }
-        }
+}
 
-        .close {
-            color: #aaa;
-            float: right;
-            font-size: 28px;
-            font-weight: bold;
-        }
+/* 🔔 Row highlights */
+.overdue{
+  background-color: #ffe1e1 !important;
+  padding: 10px 16px;
+}
 
-        .close:hover,
-        .close:focus {
-            color: black;
-            text-decoration: none;
-            cursor: pointer;
-        }
+.exceed-lent {
+  background-color: #fff4cc !important;
+}
 
-        .reader-photo {
-            width: 100px;
-            height: 100px;
-            object-fit: cover;
-            border-radius: 50%;
-            margin-bottom: 20px;
-        }
+/* 💬 Modal Styles */
+.modal-details {
+  display: none ;
+  position: fixed;
+  z-index: 999;
+  left: 0; top: 0;
+  width: 100%; height: 100%;
+  background-color: rgba(0,0,0,0.4);
+  display: flex; /* Enables flexbox for centering */
+  justify-content: center; /* Horizontally center the modal content */
+  align-items: center; /* Vertically center the modal content */
+}
+
+
+.modal-d-content {
+  background-color: var(--white);
+  margin: 10% auto;
+  padding: 2rem;
+  border: 1px solid var(--accent);
+  width: 80%;
+  max-width: 400px;
+  border-radius: 1rem;
+  box-shadow: 0 0 20px rgba(0,0,0,0.2);
+  margin: 0; /* Remove default margin */
+}
+.modal-d-content h2 {
+  font-size: 1.5rem;
+  margin-bottom: 20px;
+  color: var(--accent);
+  border-left: 6px solid var(--highlight);
+  padding-left: 10px;
+}
+
+.close {
+  float: right;
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: var(--primary-dark);
+  cursor: pointer;
+}
+
+.reader-photo {
+  width: 100px;
+  height: 100px;
+  object-fit: cover;
+  border-radius: 50%;
+  margin-bottom: 1rem;
+}
+
+
     </style>
+
 </body>
 </html>

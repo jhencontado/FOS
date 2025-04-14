@@ -7,42 +7,52 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      background-color: #f4f4f4;
-      padding: 20px;
-      text-align: center;
-    }
-    .container {
-      max-width: 900px;
-      margin: auto;
-      background: white;
-      padding: 20px;
-      border-radius: 10px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
-    }
+
     input, select {
-      padding: 8px;
+      padding: 70px;
       margin: 8px 0;
       border: 1px solid #ccc;
       border-radius: 5px;
-      width: 90%;
+      width:90%;
     }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 20px;
-    }
-    th, td {
+
+    /* Search Input */
+    .searchInput {
+      display: flex;
+      gap: 10px;
+      align-items: center;
       padding: 10px;
-      border: 1px solid #ddd;
+      margin-bottom: 20px;
+      width: 60%; /* Adjust the width to make it wider */
+      max-width: 500px; /* Maximum width limit */
+      justify-content: flex-end; /* Align the search input to the right */
     }
-    th {
-      background-color: #007BFF;
-      color: white;
+
+    .searchInput input[type="text"] {
+      width: 100%; /* Ensure the input fills the container */
+      height: 35px; /* Shorter height for the input */
+      padding: 8px;
+      border-radius: 5px;
+      border: 1px solid var(--accent);
     }
+
+        * Buttons */
+    .btn {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: all 0.3s ease-in-out;
+    }
+
+    .btn-search {
+      background-color: var(--accent);
+      color: var(--white);
+    }
+
     .btn-return {
-      background-color: #28a745;
+      background-color: #F77F00;
       color: white;
       padding: 5px 10px;
       border: none;
@@ -50,11 +60,11 @@
       cursor: pointer;
     }
     .btn-return:hover {
-      background-color: #218838;
+      background-color: #567c8d;
     }
 
     /* Modal Styling */
-    .modal {
+    .modal-return {
       display: none;
       position: fixed;
       z-index: 10;
@@ -62,7 +72,7 @@
       width: 100%; height: 100%;
       background-color: rgba(0, 0, 0, 0.6);
     }
-    .modal-content {
+    .modal-r-content {
       background-color: #fff;
       margin: 10% auto;
       padding: 20px;
@@ -70,6 +80,20 @@
       width: 500px;
       text-align: left;
     }
+    .modal-r-content h2 {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            color: var(--accent);
+            border-left: 6px solid var(--highlight);
+            padding-left: 10px;
+        }
+    .modal-r-content input, .modal-r-content select {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 12px;
+            border: 1px solid var(--soft-bg);
+            border-radius: 8px;
+        }
     .close {
       float: right;
       font-size: 24px;
@@ -79,10 +103,17 @@
 </head>
 <body>
 {% include "sidebar.html" %}
-<div class="container">
-  <h2>Return Books</h2>
+<div class="content">
+  <h1>Return Books</h1>
+
+
+  <div class ="searchInput">
   <input type="text" id="searchInput" placeholder="Search by Reader ID or Name">
-  <table>
+
+  </div>
+
+  <table class="table">
+
     <thead>
       <tr>
         <th>Issued Number</th>
@@ -101,10 +132,10 @@
 </div>
 
 <!-- Modal for return -->
-<div id="returnModal" class="modal">
-  <div class="modal-content">
+<div id="returnModal" class="modal-return">
+  <div class="modal-r-content">
     <span class="close" onclick="$('#returnModal').hide()">&times;</span>
-    <h3>Process Return</h3>
+    <h2>Process Return</h2>
     <form id="returnForm" action="/process_return" method="POST">
       <input type="hidden" id="issued_number" name="issued_number">
       <input type="hidden" id="reader_id" name="reader_id">
@@ -144,15 +175,15 @@
 </div>
 
 <script>
-  // Set the admin ID globally in JavaScript
-  const adminId = "{{ admin_id }}"; // This will be injected by Flask
+  const adminId = "{{ admin_id }}"; // Injected from Flask
+  let currentReturnItem = null;
 
   function getAdminId() {
     return adminId;
   }
 
   $(document).ready(function () {
-    // Fetch Data for Table
+    // Load data into table
     function fetchData(query = '') {
       $.ajax({
         url: '/fetch_return',
@@ -177,36 +208,34 @@
           $('#returnList').html(tableContent);
         },
         error: function(xhr, status, error) {
-          console.log('Error fetching data:', error);
+          console.error('Error fetching data:', error);
           alert('Error fetching data.');
         }
       });
     }
 
-    fetchData(); // Initial data fetch
+    fetchData(); // Initial fetch
 
-    // Search functionality
+    // Search input listener
     $('#searchInput').on('keyup', function () {
       fetchData($(this).val());
     });
 
-    // Handle return button click
+    // Open modal and populate data
     $(document).on('click', '.btn-return', function () {
       let item = $(this).data('item');
+      currentReturnItem = item;
 
-      // Set data to modal form fields
       $('#issued_number').val(item.issued_number);
       $('#reader_id').val(item.reader_id);
       $('#book_id').val(item.book_id);
       $('#return_date').val(new Date().toISOString().split('T')[0]);
+      $('#admin_id').val(getAdminId());
 
-      // Set admin ID dynamically
-      $('#admin_id').val(getAdminId()); // Set admin ID dynamically
+      $('#book_condition').val('good'); // reset
+      $('#fine_type').val('');
+      $('#fine_amount').val('0.00');
 
-       // Set default fine amount
-        updateFineAmount(item);
-
-      // Show modal
       $('#returnModal').show();
     });
 
@@ -215,45 +244,46 @@
       $('#returnModal').hide();
     });
 
-    // When fine type changes, update fine amount
+    // Fine amount depends only on fine_type
     $('#fine_type').on('change', function () {
-        updateFineAmount();
+      const fineType = $(this).val();
+      updateFineAmount(fineType);
     });
 
-    // Update fine amount based on fine type
-    function updateFineAmount(item = null) {
-        const fineType = $('#fine_type').val();
-        let fineAmount = 0;
+    function updateFineAmount(fineType) {
+      if (!currentReturnItem) return;
 
-        if (fineType === 'overdue') {
-            const exceedDays = item ? item.exceed_days : 0; // Fetch from the item data
-            fineAmount = exceedDays * 50;
-        } else if (fineType === 'lost') {
-            $.ajax({
-                url: '/fetch_book_price',
-                method: 'GET',
-                data: { book_id: item.book_id },
-                success: function(data) {
-                    const bookAmount = data.book_price || 0;
-                    fineAmount = bookAmount;
-                    $('#fine_amount').val(fineAmount.toFixed(2)); // Display fine amount
-                }
-            });
-        } else if (fineType === 'damaged') {
-            fineAmount = 100;
-        }
-
-        // If fine is set from other options, update the input field
-        if (fineType !== 'lost') {
-            $('#fine_amount').val(fineAmount.toFixed(2));
-        }
+      if (fineType === 'overdue') {
+        const days = currentReturnItem.exceed_days || 0;
+        const fine = days * 50;
+        $('#fine_amount').val(fine.toFixed(2));
+      } else if (fineType === 'lost') {
+        $('#fine_amount').val('Loading...');
+        $.ajax({
+          url: '/fetch_book_price',
+          method: 'GET',
+          data: { book_id: currentReturnItem.book_id },
+          success: function(data) {
+            const price = data.book_amount || 0;  // <-- updated here
+            console.log("Fetched book amount for lost:", price);
+            $('#fine_amount').val(price.toFixed(2));
+          },
+          error: function(xhr, status, error) {
+            console.error("Failed to fetch book amount:", error);
+            $('#fine_amount').val('0.00');
+          }
+        });
+      } else if (fineType === 'damaged') {
+        $('#fine_amount').val('100.00');
+      } else {
+        $('#fine_amount').val('0.00');
+      }
     }
 
-    // Handle form submission
+    // Form submit
     $('#returnForm').on('submit', function (e) {
       e.preventDefault();
 
-      // Collect form data
       const returnData = {
         issued_number: $('#issued_number').val(),
         reader_id: $('#reader_id').val(),
@@ -266,36 +296,29 @@
         processed_by: $('#admin_id').val()
       };
 
-      console.log(returnData); // Optional: Log the data to verify the form values
-
-      // Send data to server
       $.ajax({
         url: '/process_return',
         method: 'POST',
         contentType: 'application/json',
         data: JSON.stringify(returnData),
         success: function (response) {
-          // Handle success
-          console.log(response); // Optional: Log the response for debugging
-
-          if (response.message) {
-            alert(response.message);  // Show success message (book returned successfully)
-          }
+          alert(response.message || 'Book returned successfully.');
           $('#returnModal').hide();
+          fetchData();
 
-          fetchData(); // Refresh data after return
-
-           // After the return is processed
-          window.open('/return_receipt?return_id=' + response.receipt.return_id, '_blank');
+          if (response.receipt && response.receipt.return_id) {
+            window.open('/return_receipt?return_id=' + response.receipt.return_id, '_blank');
+          }
         },
         error: function (xhr, status, error) {
-          console.log('Error during return:', xhr.responseText, status, error);
+          console.error('Error processing return:', xhr.responseText);
           alert('Error processing return.');
         }
       });
     });
   });
 </script>
+
 
 </body>
 </html>

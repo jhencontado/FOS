@@ -9,6 +9,8 @@ import MySQLdb.cursors
 from flask import Flask, render_template, jsonify, request, redirect, url_for, flash, session
 from flask_mysqldb import MySQL
 from werkzeug.utils import secure_filename
+from flask_mail import Mail, Message
+import threading
 
 app = Flask(__name__, static_folder='static')
 
@@ -19,6 +21,17 @@ app.config['MYSQL_HOST'] = 'localhost'
 app.config['MYSQL_USER'] = 'dbadmin'
 app.config['MYSQL_PASSWORD'] = 'Jheyan061709'
 app.config['MYSQL_DB'] = 'library'
+
+
+
+app.config['MAIL_SERVER'] = 'smtp.gmail.com'
+app.config['MAIL_PORT'] = 587
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USE_SSL'] = False
+app.config['MAIL_USERNAME'] = 'booklight019@gmail.com'
+app.config['MAIL_PASSWORD'] = 'iacv uvqd brme akst'
+app.config['MAIL_DEFAULT_SENDER'] = 'booklight019@gmail.com'
+mail = Mail(app)
 
 
 
@@ -405,7 +418,21 @@ def readers():
 @app.route('/readers')
 def manage_readers():
     cursor = mysql.connection.cursor()
-    cursor.execute("SELECT * FROM reader")
+
+    query = """
+    SELECT r.*, 
+        (
+            SELECT COUNT(*) 
+            FROM issued i
+            WHERE i.reader_id = r.reader_id
+              AND i.issued_number NOT IN (
+                  SELECT issued_number FROM return_book
+              )
+        ) AS lend_book
+    FROM reader r
+    """
+
+    cursor.execute(query)
     readers = cursor.fetchall()
     cursor.close()
     return render_template('reader.html', readers=readers)
@@ -529,7 +556,7 @@ def search_reader():
             # Search for readers by name or ID
             cursor = mysql.connection.cursor()
             cursor.execute("""
-                SELECT reader_id, name, email, contact_number, status
+                SELECT reader_id, name, email, contact_number, status, lend_book
                 FROM reader
                 WHERE name LIKE %s OR reader_id LIKE %s
             """, (f"%{query}%", f"%{query}%"))
@@ -544,7 +571,8 @@ def search_reader():
                     'name': reader[1],
                     'email': reader[2],
                     'contact_number': reader[3],
-                    'status': reader[4]
+                    'status': reader[4],
+                    'lend_book': reader[5]
                 })
 
             return jsonify(reader_data)
@@ -665,6 +693,15 @@ def issue_books():
                 VALUES (%s, %s, %s, %s, CURDATE())
             """, (reader_id, fine_details['fine_type'], fine_details['fine_amount'], fine_details['status']))
 
+    # Fetch reader info for email
+    cur.execute("SELECT name, email, contact_number FROM reader WHERE reader_id = %s", (reader_id,))
+    reader_data = cur.fetchone()
+    reader_name = reader_data[0] if reader_data else "Unknown"
+    reader_email = reader_data[1] if reader_data else None
+    reader_contact = reader_data[2] if reader_data else "Unknown"
+
+
+
     # Fetch admin name for the receipt
     cur.execute("SELECT name FROM admin WHERE admin_id = %s", (admin_id,))
     admin_name = cur.fetchone()
@@ -696,6 +733,13 @@ def issue_books():
         "books": [{"title": title} for title in book_titles],
         "fine_details": fine_details  # Add fine details if any
     }
+    # Send email
+    if reader_email:
+        send_issue_email(reader_email, reader_name, book_titles, return_date)
+
+    # Inside your return or issue route after email is sent successfully
+    flash("Email sent to reader successfully!", "success")
+
 
     # Debugging session data before returning it
     print(session['receipt_data'])
@@ -704,6 +748,146 @@ def issue_books():
         "receipt_url": "/receipt",  # Optional: You can redirect the user to this URL after issuing books
         "receipt": session['receipt_data']  # Send the receipt as part of the response
     })
+
+def get_title_by_id(book_id):
+    cur = mysql.connection.cursor()
+    cur.execute("SELECT title FROM book WHERE book_id = %s", (book_id,))
+    row = cur.fetchone()
+    return row[0] if row else 'Unknown Title'
+
+def send_async_email(app, msg):
+    with app.app_context():
+        try:
+            mail.send(msg)
+            print(f"✅ Email sent to {msg.recipients}")
+        except Exception as e:
+            print(f"❌ Email failed to send: {str(e)}")
+
+
+
+def send_issue_email(reader_email, reader_name, book_titles, return_date):
+    from flask_mail import Message
+    from flask import current_app
+
+    book_list_html = ''.join(f"<li>{title}</li>" for title in book_titles)
+    msg = Message(
+        subject="📚 Book Issued - BookLight Notification",
+        sender="booklight019@gmail.com",
+        recipients=[reader_email]
+    )
+    msg.html = f"""
+        <h3>Hello {reader_name},</h3>
+        <p>You have borrowed the following books from BookLight:</p>
+        <ul>{book_list_html}</ul>
+        <p><strong>Return Date:</strong> {return_date}</p>
+        <p>Please ensure to return them on or before the due date to avoid fines.</p>
+        <br>
+        <p>Best regards,<br>📘 BookLight Library Team</p>
+    """
+
+    # Use current_app inside a background thread
+    app = current_app._get_current_object()
+    threading.Thread(target=send_async_email, args=(app, msg)).start()
+
+def send_return_email(reader_email, reader_name, book_titles, return_date, fine_amount=0):
+    from flask_mail import Message
+    from flask import current_app
+
+    book_list_html = ''.join(f"<li>{title}</li>" for title in book_titles)
+    msg = Message(
+        subject="📥 Book Returned - BookLight Confirmation",
+        sender="booklight019@gmail.com",  # Use your Gmail sender
+        recipients=[reader_email]
+    )
+
+    fine_message = ""
+    if fine_amount > 0:
+        fine_message = f"<p><strong>Note:</strong> You have an unpaid fine of <strong>₱{fine_amount:.2f}</strong>.</p>"
+
+    msg.html = f"""
+        <h3>Hello {reader_name},</h3>
+        <p>This is a confirmation that the following books have been returned to BookLight:</p>
+        <ul>{book_list_html}</ul>
+        <p><strong>Return Date:</strong> {return_date}</p>
+        {fine_message}
+        <br>
+        <p>Thank you for using BookLight Library. We hope to see you again soon!</p>
+        <br>
+        <p>Best regards,<br>📘 BookLight Library Team</p>
+    """
+
+    app = current_app._get_current_object()
+    threading.Thread(target=send_async_email, args=(app, msg)).start()
+
+
+
+
+@app.route('/send_due_emails', methods=['POST'])
+def send_due_emails():
+    today = datetime.date.today()
+    cur = mysql.connection.cursor()
+
+    cur.execute("""
+        SELECT r.reader_id, r.name, r.email, i.return_date, b.title
+        FROM issued i
+        JOIN reader r ON r.reader_id = i.reader_id
+        JOIN book b ON b.book_id = i.book_id
+        WHERE i.return_date = %s
+    """, (today,))
+
+    results = cur.fetchall()
+
+    if not results:
+        return jsonify(success=False, message="📭 No due books today.")
+
+    # Group books by reader
+    readers = {}
+    for row in results:
+        reader_id, name, email, return_date, title = row
+        if reader_id not in readers:
+            readers[reader_id] = {
+                "name": name,
+                "email": email,
+                "due_date": return_date,
+                "books": []
+            }
+        readers[reader_id]["books"].append(title)
+
+    # Send email to each reader
+    for data in readers.values():
+        send_due_reminder_email(
+            reader_email=data["email"],
+            reader_name=data["name"],
+            book_titles=data["books"],
+            due_date=data["due_date"]
+        )
+
+    return jsonify(success=True, message="✅ Due date reminder emails sent.")
+
+
+def send_due_reminder_email(reader_email, reader_name, book_titles, due_date):
+    from flask_mail import Message
+    from flask import current_app
+    import threading
+
+    book_list_html = ''.join(f"<li>{title}</li>" for title in book_titles)
+    msg = Message(
+        subject="⏰ Book Due Reminder - BookLight",
+        sender="booklight019@gmail.com",
+        recipients=[reader_email]
+    )
+
+    msg.html = f"""
+        <h3>Hello {reader_name},</h3>
+        <p>This is a reminder that the following books are due on <strong>{due_date}</strong>:</p>
+        <ul>{book_list_html}</ul>
+        <p>Please return them on or before the due date to avoid any penalties.</p>
+        <br>
+        <p>Best regards,<br>📘 BookLight Library Team</p>
+    """
+
+    app = current_app._get_current_object()
+    threading.Thread(target=send_async_email, args=(app, msg)).start()
 
 
 
@@ -768,21 +952,28 @@ def update_fine_status():
 
     return jsonify({"message": "Fine status updated successfully!"}), 200
 
+
 @app.route('/fetch_book_price', methods=['GET'])
 def fetch_book_price():
     book_id = request.args.get('book_id')
+
     if not book_id:
         return jsonify({'error': 'Book ID is required'}), 400
 
-    # Fetch book amount from the database
-    cur = mysql.connection.cursor()
-    cur.execute("SELECT book_amount FROM book WHERE book_id = %s", (book_id,))
-    book = cur.fetchone()
+    try:
+        cur = mysql.connection.cursor()
+        cur.execute("SELECT book_amount FROM book WHERE book_id = %s", (book_id,))
+        book = cur.fetchone()
+        cur.close()
 
-    if book:
-        return jsonify({'book_amount': book[0]})
-    else:
-        return jsonify({'error': 'Book not found'}), 404
+        if book:
+            return jsonify({'book_amount': float(book[0])})
+        else:
+            return jsonify({'error': 'Book not found'}), 404
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 
 @app.route('/fetch_issued', methods=['GET'])
 def fetch_issued():
@@ -1097,6 +1288,7 @@ def process_return():
         return jsonify({'error': 'An error occurred: ' + str(e)}), 500
 
 
+
 @app.route('/return_receipt')
 def return_receipt():
     receipt_data = session.get('return_receipt_data')  # Retrieve data from the session
@@ -1104,7 +1296,19 @@ def return_receipt():
         return "No return receipt data available", 400  # Return an error if no data found
     return render_template('return_receipt.html', receipt=receipt_data)  # Pass the data to the template
 
-
+@app.route('/test_email')
+def test_email():
+    try:
+        msg = Message(
+            subject="📧 Test Email from BookLight",
+            recipients=['jbdianzon@gmail.com'],  # replace with your own email to test
+            body="This is a test email sent from Flask using Outlook SMTP.",
+            sender="booklight019@gmail.com"
+        )
+        mail.send(msg)
+        return "✅ Test email sent!"
+    except Exception as e:
+        return f"❌ Email failed: {e}"
 
 
 

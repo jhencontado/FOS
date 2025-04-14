@@ -7,6 +7,39 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}"> <!-- Link to CSS file -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script>
+        document.getElementById('notif-bell').addEventListener('click', function () {
+            const dropdown = document.getElementById('notif-dropdown');
+            dropdown.classList.toggle('hidden');
+        });
+
+        function addNotification(message, isSuccess = true) {
+            const dropdown = document.getElementById('notif-dropdown');
+            const p = document.createElement('p');
+            p.textContent = message;
+            p.style.color = isSuccess ? 'green' : 'red';
+            dropdown.prepend(p); // Add latest on top
+        }
+
+        function sendEmailToAll() {
+            addNotification("⏳ Sending due reminders...", true);
+
+            fetch('/send_due_emails', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    addNotification(data.message || "✅ Emails sent successfully.");
+                } else {
+                    addNotification(data.message || "⚠️ No due books or failed to send.", false);
+                }
+            })
+            .catch(error => {
+                console.error("Error:", error);
+                addNotification("❌ An error occurred while sending emails.", false);
+            });
+        }
+
         function updateDateTime() {
             const now = new Date();
             const options = { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' };
@@ -17,6 +50,10 @@
         }
         setInterval(updateDateTime, 1000);
         window.onload = updateDateTime;
+
+
+
+
     </script>
 </head>
 <body>
@@ -45,6 +82,13 @@
                 <span class="admin-name">{{ name }}</span>
                 <p id="currentDate"></p>
                 <p id="currentTime"></p>
+                
+           <div class="notification-wrapper">
+                <i class="fas fa-bell" id="notif-bell"></i>
+                <div id="notif-dropdown" class="notif-dropdown hidden">
+                    <!-- Notifications will be added here -->
+                </div>
+            </div>
             <!-- Logout Button -->
             <a href="/home" class="logout-button" style="margin-top: 10px; padding: 8px 16px; background-color: #e74c3c; color: white; text-decoration: none; border-radius: 6px; display: inline-block; width: fit-content;">
             <i class="fas fa-power-off" style="margin-right: 5px;"></i> Log out

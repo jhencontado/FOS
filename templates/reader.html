@@ -4,162 +4,112 @@
     <meta charset="UTF-8">
     <title>Manage Readers</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+     <script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
     <style>
-        /* Modal Styles */
+
         .reader-modal {
-            display: none; /* Hidden by default */
+            display: none;
             position: fixed;
-            z-index: 1;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            overflow: auto;
-            background-color: rgba(0, 0, 0, 0.4);
-            padding-top: 30px;
+            top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            background: rgba(0, 0, 0, 0.4);
+            justify-content: center;
+            align-items: center;
+            z-index: 999;
         }
 
         .modal-content {
-            background-color: #fff;
-            margin: 5% auto;
-            padding: 15px;
-            border: 1px solid #888;
-            width: 70%;
+            background-color: var(--white);
+            padding: 30px;
+            border-radius: 16px;
+            width: 90%;
             max-width: 600px;
-            border-radius: 10px;
-            display: flex;
-            flex-direction: column; /* Stack elements vertically */
-            justify-content: flex-start;
+            animation: fadeIn 0.3s ease-in-out;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
         }
 
-        /* Close button */
-        .close {
-            color: #aaa;
-            float: right;
-            font-size: 28px;
-            font-weight: bold;
-        }
-
-        .close:hover,
-        .close:focus {
-            color: black;
-            text-decoration: none;
-            cursor: pointer;
-        }
-
-        .modal-header {
+        .modal-content h2 {
             font-size: 1.5rem;
-            font-weight: bold;
-            color: #333;
-            text-align: center;
             margin-bottom: 20px;
+            color: var(--accent);
+            border-left: 6px solid var(--highlight);
+            padding-left: 10px;
         }
 
-        .reader-modal label {
-            display: block;
-            font-size: 1rem;
-            margin-bottom: 10px;
-            color: #333;
-        }
-
-        .reader-modal input[type="text"],
-        .reader-modal input[type="email"],
-        .reader-modal input[type="number"] {
+        .modal-content input, .modal-content select {
             width: 100%;
             padding: 10px;
-            margin: 5px 0 15px 0;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            font-size: 1rem;
+            margin-bottom: 12px;
+            border: 1px solid var(--soft-bg);
+            border-radius: 8px;
         }
 
-        .reader-modal button {
-            background-color: #c8d9e6;
-            color: black;
-            padding: 10px 20px;
+        .modal-content button {
+            padding: 10px;
+            width: 100%;
+            margin-top: 10px;
             border: none;
-            border-radius: 10px;
+            border-radius: 8px;
+            font-weight: bold;
             cursor: pointer;
-            font-size: 1rem;
-            margin-right: 10px;
         }
 
-        .reader-modal button:hover {
-            background-color: #567c8d;
+        .modal-content button[type="submit"] {
+            background-color: var(--highlight);
+            color: var(--white);
         }
 
-        /* Cancel Button */
-        .reader-modal .cancel-btn {
-            background-color: #c8d9e6;
+        .modal-content button.cancel-btn {
+            background-color: var(--soft-bg);
         }
 
-        .reader-modal .cancel-btn:hover {
-            background-color: #567c8d;
+        .modal-content button:hover {
+            opacity: 0.9;
         }
 
-        /* Form Section (Left side) */
-        .form-section {
-            width: 50%; /* Adjusted width */
+        .form-photo-container {
             display: flex;
-            flex-direction: column;
-            justify-content: flex-start;
+            gap: 20px;
+            flex-wrap: wrap;
         }
 
-        /* Photo Capture Section (Right side) */
-        .photo-capture-container {
-            width: 45%; /* Adjusted width */
-            display: flex;
-            flex-direction: column;
-            justify-content: flex-start;
-            align-items: center;
+        .form-section, .photo-capture-container {
+            flex: 1;
+            min-width: 250px;
+        }
+
+        #video, #capturedImage {
+            width: 100%;
+            border-radius: 8px;
+            margin-top: 10px;
         }
 
         .photo-capture-container button {
-            background-color: #F77F00;
-            color: white;
-            padding: 1px;
+            margin-top: 10px;
+            background-color: var(--highlight);
+            color: var(--white);
             border: none;
-            border-radius: 5px;
+            padding: 10px;
+            border-radius: 8px;
+        }
+
+        .close {
+            float: right;
+            font-size: 24px;
             cursor: pointer;
-            font-size: 0.9rem;
-            margin-top: 10px;
         }
 
-        #video {
-            border: 2px solid #ccc;
-            border-radius: 5px;
-            width: 70%;
-            height: auto;
-        }
-
-        /* Captured image */
-        #capturedImage {
-            margin-top: 10px;
-            border-radius: 5px;
-            max-width: 70%;
-            height: auto;
-        }
-
-        /* Center content vertically within modal */
-        .modal-content {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 20px;
-        }
-
-        /* Container for both form and capture */
-        .form-photo-container {
-            display: flex;
-            justify-content: space-between;
-            width: 100%;
-            margin-top: 15px;  /* Reduced margin */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
         }
     </style>
 </head>
 <body>
+
 {% include "sidebar.html" %}
 <div class="content">
     <h1>Registered Readers</h1>
@@ -168,93 +118,79 @@
             <form id="searchForm" class="mb-4">
                 <input type="text" id="searchQuery" placeholder="Search by name, contact, or reference" onkeyup="searchReader()">
                 <button type="button" class="btn btn-search" onclick="searchReader()"><i class="fas fa-search"></i> Search</button>
-                <button type="button" id="registerReaderBtn" class="btn btn-add"><i class="fas fa-plus"></i> Register Reader</button>
+                <button type="button" id="registerReaderBtn" class="btn btn-add">Register Reader</button>
             </form>
         </div>
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Contact</th>
+                <th>Reference ID</th>
+                <th>Address</th>
+                <th>Email</th>
+                <th>Lent Books</th>
+                <th>Status</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody id="readerTableBody">
+            {% for reader in readers %}
+            <tr>
+                <td>{{ reader.reader_id }}</td>
+                <td>{{ reader.name }}</td>
+                <td>{{ reader.contact_number }}</td>
+                <td>{{ reader.reference_id }}</td>
+                <td>{{ reader.address }}</td>
+                <td>{{ reader.email }}</td>
+                <td>{{ reader.lend_book }}</td>
+                <td>{{ reader.status }}</td>
+                <td>
+                    <button class="edit-btn" data-reader='{{ reader|tojson }}'><i class="fas fa-edit"></i></button>
+                    <button class="delete-btn" onclick="deleteReader('{{ reader.reader_id }}')"><i class="fas fa-trash"></i></button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
 
-        <div class="table">
-            <table id="readersTable" border="1">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Name</th>
-                        <th>Contact</th>
-                        <th>Reference ID</th>
-                        <th>Address</th>
-                        <th>Email</th>
-                        <th>Lent Books</th>
-                        <th>Status</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody id="readerTableBody">
-                    {% for reader in readers %}
-                        <tr>
-                            <td>{{ reader.reader_id }}</td>
-                            <td>{{ reader.name }}</td>
-                            <td>{{ reader.contact_number }}</td>
-                            <td>{{ reader.reference_id }}</td>
-                            <td>{{ reader.address }}</td>
-                            <td>{{ reader.email }}</td>
-                            <td>{{ reader.lend_book }}</td>
-                            <td>{{ reader.status }}</td>
-                            <td>
-                                <button class="edit-btn" aria-label="Edit" data-reader='{{ reader|tojson }}'><i class="fas fa-edit"></i></button>
-                                <button class="delete-btn" aria-label="Delete" onclick="deleteReader('{{ reader.reader_id }}')"><i class="fas fa-trash"></i></button>
-                            </td>
-                        </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <!-- Register Reader Modal -->
-    <div id="readerModal" class="reader-modal">
-        <div class="modal-content">
-            <span class="close" onclick="closeRegisterModal()">&times;</span>
-            <h3>Register New Reader</h3>
-            <form id="registerReaderForm">
-                <div class="form-photo-container">
-                    <div class="form-section">
-                        <label for="name">Full Name</label>
-                        <input type="text" name="name" id="name" required>
-
-                        <label for="contact_number">Contact Number</label>
-                        <input type="text" name="contact_number" id="contact_number" required>
-
-                        <label for="reference_id">Reference ID</label>
-                        <input type="text" name="reference_id" id="reference_id" required>
-
-                        <label for="address">Address</label>
-                        <input type="text" name="address" id="address" required>
-
-                        <label for="email">Email</label>
-                        <input type="email" name="email" id="email" required>
-
-                        <button type="submit">Register</button>
-                        <button type="button" onclick="closeRegisterModal()">Cancel</button>
-                    </div>
-
-                    <div class="photo-capture-container">
-                        <video id="video" autoplay></video>
-                        <button type="button" onclick="capturePhoto()">Capture Photo</button>
-                        <canvas id="canvas" style="display: none;"></canvas>
-                        <img id="capturedImage" style="display: none;" />
-                        <input type="hidden" id="photo" name="photo">
-                    </div>
+<!-- Register Reader Modal -->
+<div id="readerModal" class="reader-modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeRegisterModal()">&times;</span>
+        <h2>Register New Reader</h2>
+        <form id="registerReaderForm">
+            <div class="form-photo-container">
+                <div class="form-section">
+                    <input type="text" name="name" placeholder="Full Name" required>
+                    <input type="text" name="contact_number" placeholder="Contact Number" required>
+                    <input type="text" name="reference_id" placeholder="Reference ID" required>
+                    <input type="text" name="address" placeholder="Address" required>
+                    <input type="email" name="email" placeholder="Email" required>
+                    <button type="submit">Register</button>
+                    <button type="button" class="cancel-btn" onclick="closeRegisterModal()">Cancel</button>
                 </div>
-            </form>
-        </div>
+                <div class="photo-capture-container">
+                    <video id="video" autoplay></video>
+                    <button type="button" onclick="capturePhoto()">Capture Photo</button>
+                    <canvas id="canvas" style="display: none;"></canvas>
+                    <img id="capturedImage" style="display: none;" />
+                    <input type="hidden" id="photo" name="photo">
+                </div>
+            </div>
+        </form>
     </div>
+</div>
 
-    <!-- Edit Reader Modal -->
-    <div id="editModal" class="reader-modal">
-        <div class="modal-content">
-            <span class="close" onclick="closeEditModal()">&times;</span>
-            <h3>Edit Reader</h3>
-            <form id="editReaderForm">
-                <input type="hidden" id="editReaderId" name="reader_id">
+<!-- Edit Reader Modal -->
+<div id="editModal" class="reader-modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeEditModal()">&times;</span>
+        <h2>Edit Reader</h2>
+        <form id="editReaderForm">
+            <input type="hidden" id="editReaderId" name="reader_id">
                 <label for="editName">Full Name</label>
                 <input type="text" id="editName" name="name" required>
 
@@ -271,31 +207,35 @@
                 <input type="email" id="editEmail" name="email" required>
 
                 <button type="submit">Save Changes</button>
-                <button type="button" onclick="closeEditModal()">Cancel</button>
-            </form>
-        </div>
-    </div>
-</div>
+                <button type="button" class="cancel-btn" onclick="closeEditModal()">Cancel</button>
 
+        </form>
+    </div>
+</DIV>
+</div>
+<script src="{{ url_for('static', filename='js/reader.js') }}"></script>
 <script>
-// Open Register Reader Modal
-document.getElementById("registerReaderBtn").onclick = function(event) {
-    event.preventDefault();
-    document.getElementById("readerModal").style.display = "block";
-    document.getElementById("editModal").style.display = "none";
+ // Open Register Reader Modal
+document.getElementById("registerReaderBtn").onclick = function () {
+    document.getElementById("readerModal").style.display = "flex";
     startCamera();
 };
 
-// Start Camera Stream
+// Close Register Modal
+function closeRegisterModal() {
+    document.getElementById("readerModal").style.display = "none";
+}
+
+// Close Edit Modal
+function closeEditModal() {
+    document.getElementById("editModal").style.display = "none";
+}
+
+// Start Camera for Photo Capture
 function startCamera() {
-    navigator.mediaDevices.getUserMedia({ video: true })
-        .then(stream => {
-            const video = document.getElementById("video");
-            if (video) {
-                video.srcObject = stream;
-            }
-        })
-        .catch(err => console.error("Camera access denied:", err));
+    navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
+        document.getElementById("video").srcObject = stream;
+    }).catch(err => console.error("Camera error:", err));
 }
 
 // Capture Photo
@@ -304,45 +244,115 @@ function capturePhoto() {
     const canvas = document.getElementById("canvas");
     const context = canvas.getContext("2d");
 
-    context.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const imageData = canvas.toDataURL("image/png");
-    document.getElementById("photo").value = imageData;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    context.drawImage(video, 0, 0);
 
-    const capturedImage = document.getElementById("capturedImage");
-    capturedImage.src = imageData;
-    capturedImage.style.display = "block";
+    const dataURL = canvas.toDataURL("image/png");
+    document.getElementById("photo").value = dataURL;
+    document.getElementById("capturedImage").src = dataURL;
+    document.getElementById("capturedImage").style.display = "block";
 }
 
-// Close Modals
-function closeRegisterModal() {
-    document.getElementById("readerModal").style.display = "none";
-}
-function closeEditModal() {
-    document.getElementById("editModal").style.display = "none";
-}
-
-// Close modal when clicking outside
-window.onclick = function(event) {
-    if (event.target === document.getElementById("readerModal")) closeRegisterModal();
-    if (event.target === document.getElementById("editModal")) closeEditModal();
-};
-
-// Edit Reader Modal
+// Edit Reader Data
 document.querySelectorAll(".edit-btn").forEach(btn => {
     btn.addEventListener("click", () => {
-        const readerData = JSON.parse(btn.dataset.reader);
+        const data = JSON.parse(btn.dataset.reader);
+        document.getElementById("editReaderId").value = data.reader_id;
+        document.getElementById("editName").value = data.name;
+        document.getElementById("editContactNumber").value = data.contact_number;
+        document.getElementById("editReferenceId").value = data.reference_id;
+        document.getElementById("editAddress").value = data.address;
+        document.getElementById("editEmail").value = data.email;
 
-        document.getElementById("editReaderId").value = readerData.reader_id;
-        document.getElementById("editName").value = readerData.name;
-        document.getElementById("editContactNumber").value = readerData.contact_number;
-        document.getElementById("editReferenceId").value = readerData.reference_id;
-        document.getElementById("editAddress").value = readerData.address;
-        document.getElementById("editEmail").value = readerData.email;
-
-        document.getElementById("editModal").style.display = "block";
+        document.getElementById("editModal").style.display = "flex";
         document.getElementById("readerModal").style.display = "none";
     });
 });
+
+// Close modals when clicked outside
+window.onclick = function (e) {
+    if (e.target === document.getElementById("readerModal")) closeRegisterModal();
+    if (e.target === document.getElementById("editModal")) closeEditModal();
+};
+
+// Search Reader
+function searchReader() {
+    const query = document.getElementById("searchQuery").value;
+    fetch(`/readers?search=${query}`)
+        .then(response => response.json())
+        .then(data => {
+            const tableBody = document.getElementById("readerTableBody");
+            tableBody.innerHTML = '';
+            data.readers.forEach(reader => {
+                const row = `<tr>
+                    <td>${reader.reader_id}</td>
+                    <td>${reader.name}</td>
+                    <td>${reader.contact_number}</td>
+                    <td>${reader.reference_id}</td>
+                    <td>${reader.address}</td>
+                    <td>${reader.email}</td>
+                    <td>${reader.lend_book}</td>
+                    <td>${reader.status}</td>
+                    <td>
+                        <button class="edit-btn" data-reader='${JSON.stringify(reader)}'><i class="fas fa-edit"></i></button>
+                        <button class="delete-btn" onclick="deleteReader(${reader.reader_id})"><i class="fas fa-trash"></i></button>
+                    </td>
+                </tr>`;
+                tableBody.innerHTML += row;
+            });
+        });
+}
+
+// Add Reader (AJAX)
+document.getElementById("registerReaderForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+    fetch('/add_reader', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        alert(data.message);
+        closeRegisterModal();
+        searchReader();  // Refresh the reader list
+    })
+    .catch(error => alert("Error: " + error));
+});
+
+// Delete Reader (AJAX)
+function deleteReader(readerId) {
+    if (confirm("Are you sure you want to delete this reader?")) {
+        fetch(`/delete_reader/${readerId}`, {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            alert(data.message);
+            searchReader();  // Refresh the reader list
+        })
+        .catch(error => alert("Error: " + error));
+    }
+}
+
+// Update Reader (AJAX)
+document.getElementById("editReaderForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+    fetch('/update_reader', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        alert(data.message);
+        closeEditModal();
+        searchReader();  // Refresh the reader list
+    })
+    .catch(error => alert("Error: " + error));
+});
+
 </script>
 
 </body>

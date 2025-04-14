@@ -36,6 +36,7 @@ cursor.execute('''CREATE TABLE IF NOT EXISTS book (
     ISBN VARCHAR(20) UNIQUE NOT NULL,
     image VARCHAR(20) null ,
     available_qnty INT NOT NULL
+    DECIMAL(10,2) NOT NULL DEFAULT 0.00;
 )''')
 
 cursor.execute('''-''')
@@ -77,6 +78,8 @@ cursor.execute('''CREATE TABLE IF NOT EXISTS issued (
     FOREIGN KEY (book_id) REFERENCES book(book_id) ON DELETE CASCADE
     FOREIGN KEY (admin_id) REFERENCES admin(admin_id);
 )''')
+
+
 
 db.commit()
 db.close()
