@@ -1,65 +1,218 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Return Receipt</title>
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        .container { max-width: 600px; margin: auto; padding: 20px; border: 1px solid #ddd; border-radius: 5px; background-color: #f9f9f9; }
-        h2, h4 { text-align: center; }
-        table { width: 100%; margin-top: 10px; border-collapse: collapse; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        th { background-color: #f2f2f2; }
-        .btn-container { text-align: center; margin-top: 20px; }
-        .btn { padding: 10px 15px; border: none; border-radius: 5px; cursor: pointer; margin: 5px; }
-        .btn-print { background-color: #007bff; color: white; }
-        .btn-home { background-color: #28a745; color: white; }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Return Receipt</title>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <style>
+    :root {
+      --primary-dark: #2f4156;
+      --accent: #567c8d;
+      --soft-bg: #c8d9e6;
+      --light-bg: #f5efeb;
+      --white: #ffffff;
+      --highlight: #F77F00;
+    }
 
-        /* Hide elements when printing */
-        @media print {
-            .btn-container { display: none; }
-            body { margin: 0; }
-        }
-    </style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: var(--light-bg);
+      color: var(--primary-dark);
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: auto;
+      background-color: var(--white);
+      border-radius: 12px;
+      padding: 30px;
+      box-shadow: 0 4px 12px rgba(47, 65, 86, 0.1);
+      border-top: 6px solid var(--highlight);
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+
+    .header img {
+      width: 50px;
+      height: 50px;
+    }
+
+    h2 {
+      text-align: center;
+      color: var(--primary-dark);
+    }
+
+    h4 {
+      margin-top: 25px;
+      color: var(--accent);
+    }
+
+    p {
+      margin: 5px 0;
+    }
+
+    .grid {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .section {
+      flex: 1;
+      min-width: 250px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+    }
+
+    th, td {
+      border: 1px solid var(--soft-bg);
+      padding: 10px;
+      text-align: left;
+    }
+
+    th {
+      background-color: var(--soft-bg);
+      color: var(--primary-dark);
+    }
+
+    tbody tr:nth-child(even) {
+      background-color: #f9f9f9;
+    }
+
+    .btn-container {
+      text-align: center;
+      margin-top: 30px;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      font-size: 16px;
+      cursor: pointer;
+      margin: 5px;
+      transition: all 0.3s ease;
+    }
+
+    .btn-print {
+      background-color: var(--accent);
+      color: var(--white);
+    }
+
+    .btn-print:hover {
+      background-color: var(--primary-dark);
+    }
+
+    .btn-home {
+      background-color: var(--highlight);
+      color: var(--white);
+    }
+
+    .btn-home:hover {
+      background-color: #c26500;
+    }
+
+    @media print {
+      .btn-container {
+        display: none;
+      }
+
+      body {
+        margin: 0;
+        padding: 0;
+        background: none;
+      }
+
+      .container {
+        box-shadow: none;
+        border: none;
+      }
+    }
+  </style>
 </head>
 <body>
 
 <div class="container" id="receipt-section">
+  <!-- Logo and Header -->
+  <div class="header">
+    <img src="/static/image/logo.jpg" alt="BookLight Logo" />
     <h2>Book Return Receipt</h2>
+  </div>
 
-    <p><strong>Return ID:</strong> {{ receipt.return_id }}</p>
+  <p><strong>Return ID:</strong> {{ receipt.return_id }}</p>
 
-    <h4>Admin Details</h4>
-    <p><strong>Admin Name:</strong> {{ receipt.admin.name }}</p>
-
-    <h4>Reader Details</h4>
-    <p><strong>Reader ID:</strong> {{ receipt.reader.id }}</p>
-    <p><strong>Name:</strong> {{ receipt.reader.name }}</p>
-    <p><strong>Contact:</strong> {{ receipt.reader.contact }}</p>
-
-    <h4>Book Details</h4>
-    <p><strong>Book Title:</strong> {{ receipt.book.title }}</p>
-
-    <h4>Return Details</h4>
-    <p><strong>Return Date:</strong> {{ receipt.return_date }}</p>
-    <p><strong>Fine Amount:</strong> {{ receipt.fine_details.amount }}</p>
-    <p><strong>Fine Type:</strong> {{ receipt.fine_details.type }}</p>
-    <p><strong>Fine Status:</strong> {{ receipt.fine_details.status }}</p>
-
-
-    <div class="btn-container">
-        <button class="btn btn-print" onclick="printReceipt()">Print</button>
-        <button class="btn btn-home" onclick="window.location.href='/dashboard'">Home</button>
+  <div class="grid">
+    <!-- Reader Details -->
+    <div class="section">
+      <h4>👤 Reader Details</h4>
+      <p><strong>Reader ID:</strong> {{ receipt.reader.id }}</p>
+      <p><strong>Name:</strong> {{ receipt.reader.name }}</p>
+      <p><strong>Contact:</strong> {{ receipt.reader.contact }}</p>
     </div>
+
+    <!-- Return Details -->
+    <div class="section">
+      <h4>📅 Return Details</h4>
+      <p><strong>Return Date:</strong> {{ receipt.return_date }}</p>
+      <p><strong>Fine Amount:</strong> {{ receipt.fine_details.amount }}</p>
+      <p><strong>Fine Type:</strong> {{ receipt.fine_details.type }}</p>
+      <p><strong>Fine Status:</strong> {{ receipt.fine_details.status }}</p>
+    </div>
+  </div>
+
+  <!-- Admin Info -->
+  <div class="section">
+    <h4>👨‍💼 Admin Details</h4>
+    <p><strong>Admin Name:</strong> {{ receipt.admin.name }}</p>
+  </div>
+
+  <!-- Book Info -->
+  <div class="section">
+    <h4>📚 Book Returned</h4>
+    <table>
+      <thead>
+        <tr>
+          <th>Book Title</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>{{ receipt.book.title }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Buttons -->
+<div class="btn-container">
+  <button class="btn btn-print" onclick="printReceipt()">🖨️ Print</button>
+  <button class="btn btn-home" onclick="window.location.href='/dashboard'">🏠 Home</button>
 </div>
 
 <script>
-// Function to print only the receipt
-function printReceipt() {
+  function printReceipt() {
     window.print();
-}
+  }
 </script>
 
 </body>

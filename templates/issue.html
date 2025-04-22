@@ -18,7 +18,7 @@
             flex-wrap: wrap;
             width: 100%;
             max-width: 1200px;
-            margin-bottom: 20px;
+             margin: 0 auto 20px auto; /* <-- this centers it horizontally */
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
 
@@ -29,7 +29,7 @@
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
             padding: 50px;
             flex: 1;
-            min-width: 400px;
+            min-width: 500px;
             margin-top: 30px;
         }
 
@@ -39,6 +39,11 @@
             margin-bottom: 20px;
         }
 
+
+        .left-container {
+            width: 500px; /* Set a wider fixed width */
+            flex: none; /* Prevent flex from overriding the width */
+        }
         .form-group {
             margin-bottom: 15px;
         }
@@ -151,16 +156,6 @@
 </head>
 
 <body>
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        <script>
-          {% for category, message in messages %}
-            showNotification("{{ message }}");
-          {% endfor %}
-        </script>
-      {% endif %}
-    {% endwith %}
-
     {% include "sidebar.html" %}
 
     <div class="content">
@@ -255,7 +250,7 @@
                                     data-email="${reader.email}"
                                     data-contact="${reader.contact_number}"
                                     data-status="${reader.status}"
-                                    data-lend_book="${reader.lend_book}">
+                                    data-lend_book="${reader.lend_book || 0}">
                                 ${reader.name} (ID: ${reader.reader_id})
                             </option>
                         `);

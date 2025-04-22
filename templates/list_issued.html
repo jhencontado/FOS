@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Issued Books</title>
-    <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 </head>
@@ -17,6 +16,10 @@
             <button id="filterOverdue">Overdue</button>
             <button id="filterExceedLent">Readers with 5+ Borrowed Books</button>
             <button id="showAll">Show All</button>
+            <div class="mb-3 d-flex align-items-center gap-2">
+            <button id="sendRemindersBtn" class="btn btn-primary">📧 Send Email Reminders</button>
+            <span id="reminderStatus" class="ms-2 text-muted"></span>
+        </div>
         </div>
         <div class="table">
         <table>
@@ -30,6 +33,7 @@
                     <th>Start Date</th>
                     <th>Return Date</th>
                     <th>Transaction ID</th>
+                    <th>Email Status</th>
                 </tr>
             </thead>
             <tbody id="issuedList"></tbody>
@@ -45,7 +49,7 @@
         </div>
     </div>
 
-    <script>
+<script>
     function fetchData(query = '', filterOverdue = false, filterExceedLent = false) {
         $.ajax({
             url: '/fetch_issued',
@@ -56,8 +60,9 @@
                 exceed_lent: filterExceedLent
             },
             success: function (data) {
-                if (data.length === 0) {
-                    $('#issuedList').html('<tr><td colspan="8">No records found.</td></tr>');
+                console.log(data); // Debug to check if data is returned
+                if (!data || data.length === 0) {
+                    $('#issuedList').html('<tr><td colspan="9">No records found.</td></tr>');
                     return;
                 }
 
@@ -75,6 +80,10 @@
                         rowClass += ' exceed-lent';
                     }
 
+                    const emailStatus = item.email_sent
+                        ? '<span class="email-sent" title="Reminder Sent">✅</span>'
+                        : '<span class="email-pending" title="Reminder Not Sent">❌</span>';
+
                     tableContent += `<tr class="${rowClass}">
                         <td>${item.issued_number}</td>
                         <td>${item.reader_id}</td>
@@ -84,17 +93,20 @@
                         <td>${item.start_date}</td>
                         <td>${item.return_date}</td>
                         <td><a href="#" class="transaction-link" data-transaction-id="${item.transaction_id}">${item.transaction_id}</a></td>
+                        <td>${emailStatus}</td>
                     </tr>`;
                 });
 
                 $('#issuedList').html(tableContent);
             },
-            error: function () {
-                $('#issuedList').html('<tr><td colspan="8">Error fetching records.</td></tr>');
+            error: function (xhr, status, error) {
+                console.error("Error fetching issued records:", error);
+                $('#issuedList').html('<tr><td colspan="9">Error fetching records. Please try again later.</td></tr>');
             }
         });
     }
 
+    // Filter & Search
     $('#filterOverdue').on('click', function () {
         fetchData('', true, false);
     });
@@ -113,7 +125,7 @@
         fetchData(query);
     });
 
-    // Open modal to view transaction details
+    // Modal: Transaction Details
     $(document).on('click', '.transaction-link', function (e) {
         e.preventDefault();
         let transactionId = $(this).data('transaction-id');
@@ -123,27 +135,37 @@
             method: 'GET',
             data: { transaction_id: transactionId },
             success: function (data) {
-                let transactionDetails = `
-                    <h4>Reader Details:</h4>
-                    <img src="static/uploads/${data.reader.photo}" alt="Reader Photo" class="reader-photo">
-                    <p><strong>Name:</strong> ${data.reader.name}</p>
-                    <p><strong>Email:</strong> ${data.reader.email}</p>
-                    <p><strong>Contact:</strong> ${data.reader.contact_number}</p>
-                    <hr>
-                    <h4>Book Details:</h4>
-                    <p><strong>Title:</strong> ${data.book.title}</p>
-                    <p><strong>Author:</strong> ${data.book.author}</p>
-                    <p><strong>Genre:</strong> ${data.book.genre}</p>
-                    <p><strong>Publisher:</strong> ${data.book.publisher}</p>
-                    <hr>
-                    <h4>Issued Details:</h4>
-                    <p><strong>Admin ID:</strong> ${data.admin_id}</p>
-                    <p><strong>Start Date:</strong> ${data.start_date}</p>
-                    <p><strong>Return Date:</strong> ${data.return_date}</p>
-                    <p><strong>Transaction Number:</strong> ${data.transaction_id}</p>
-                `;
-                $('#transactionDetails').html(transactionDetails);
-                $('#transactionModal').fadeIn();
+                // Check if the expected data exists before using it
+                if (data && data.reader && data.book) {
+                    let transactionDetails = `
+                        <h4>Reader Details:</h4>
+                        <img src="static/uploads/${data.reader.photo || 'default.jpg'}" alt="Reader Photo" class="reader-photo">
+                        <p><strong>Name:</strong> ${data.reader.name || 'N/A'}</p>
+                        <p><strong>Email:</strong> ${data.reader.email || 'N/A'}</p>
+                        <p><strong>Contact:</strong> ${data.reader.contact_number || 'N/A'}</p>
+                        <hr>
+                        <h4>Book Details:</h4>
+                        <p><strong>Title:</strong> ${data.book.title || 'Unknown'}</p>
+                        <p><strong>Author:</strong> ${data.book.author || 'Unknown'}</p>
+                        <p><strong>Genre:</strong> ${data.book.genre || 'Unknown'}</p>
+                        <p><strong>Publisher:</strong> ${data.book.publisher || 'Unknown'}</p>
+                        <hr>
+                        <h4>Issued Details:</h4>
+                        <p><strong>Admin ID:</strong> ${data.admin_id || 'N/A'}</p>
+                        <p><strong>Start Date:</strong> ${data.start_date || 'N/A'}</p>
+                        <p><strong>Return Date:</strong> ${data.return_date || 'N/A'}</p>
+                        <p><strong>Transaction Number:</strong> ${data.transaction_id || 'N/A'}</p>
+                    `;
+                    $('#transactionDetails').html(transactionDetails);
+                    $('#transactionModal').fadeIn();
+                } else {
+                    console.error('Transaction details not found.');
+                    alert('Error fetching transaction details.');
+                }
+            },
+            error: function (xhr, status, error) {
+                console.error("Error fetching transaction details:", error);
+                alert('Error fetching transaction details.');
             }
         });
     });
@@ -159,12 +181,33 @@
         }
     });
 
-    // Fetch initial data on page load and ensure modal is hidden
+    // Send Reminders Button Handler
+    $('#sendRemindersBtn').on('click', function () {
+        $('#reminderStatus').text("⏳ Sending reminders...").removeClass().addClass("text-warning");
+
+        $.ajax({
+            url: '/reminder/send_bulk_reminders',
+            method: 'POST',
+            success: function (res) {
+                $('#reminderStatus').text(res.status).removeClass().addClass("text-success");
+                fetchData(); // ✅ Refreshes table with updated email_sent values
+            },
+            error: function (xhr, status, error) {
+                $('#reminderStatus').text("❌ Failed to send reminders.").removeClass().addClass("text-danger");
+                console.error("Error sending reminders:", error);
+            }
+        });
+    });
+
+    // Init
     $(document).ready(function () {
-        $('#transactionModal').hide();  // Ensures modal is hidden
+        $('#transactionModal').hide();
         fetchData();
     });
 </script>
+
+
+
 
 <style>
 
@@ -238,15 +281,6 @@ a.transaction-link:hover {
 
 }
 
-/* 🔔 Row highlights */
-.overdue{
-  background-color: #ffe1e1 !important;
-  padding: 10px 16px;
-}
-
-.exceed-lent {
-  background-color: #fff4cc !important;
-}
 
 /* 💬 Modal Styles */
 .modal-details {
@@ -295,6 +329,43 @@ a.transaction-link:hover {
   object-fit: cover;
   border-radius: 50%;
   margin-bottom: 1rem;
+}
+.email-sent {
+    color: green;
+    font-weight: bold;
+}
+.email-pending {
+    color: red;
+    font-weight: bold;
+}
+/* Row highlighting */
+tr.overdue {
+    background-color: #ffe5e5; /* light red */
+    font-weight: bold;
+    color: #d8000c; /* strong red */
+}
+
+tr.exceed-lent {
+    background-color: #fff9e6; /* light yellow */
+    font-weight: bold;
+    color: #b58900; /* gold/brown */
+}
+
+/* If both apply */
+tr.overdue.exceed-lent {
+    background: linear-gradient(90deg, #ffe5e5 0%, #fff9e6 100%);
+    color: #8b0000;
+}
+
+/* Email status icons */
+.email-sent {
+    color: green;
+    font-weight: bold;
+}
+
+.email-pending {
+    color: red;
+    font-weight: bold;
 }
 
 

@@ -10,6 +10,7 @@
         let canvas = null;
         let context = null;
 
+        // Initialize camera on page load
         function startCamera() {
             video = document.getElementById('webcam');
             canvas = document.getElementById('canvas');
@@ -24,14 +25,19 @@
                 });
         }
 
+        // Capture the image from the webcam
         function captureImage() {
             if (!video || !canvas || !context) return;
 
             context.drawImage(video, 0, 0, canvas.width, canvas.height);
             let imageData = canvas.toDataURL("image/png");
             document.getElementById('photo').value = imageData;
+
+            // Log the image data to check if it is being captured
+            console.log('Captured Image Data:', imageData);
+
             document.getElementById('preview').src = imageData;
-            document.getElementById('preview').style.display = "block"; // Show preview
+            document.getElementById('preview').style.display = "block"; // Show preview of the image
         }
     </script>
 </head>
@@ -41,7 +47,7 @@
     <div class="register">
         <div class="logo">
             <img src="{{ url_for('static', filename='image/logo.jpg') }}" width="100" alt="BookLight Logo">
-          </div>
+        </div>
         <h3 class="text-center">Admin Registration</h3>
 
         {% with messages = get_flashed_messages() %}
@@ -49,10 +55,6 @@
                 <div class="alert alert-info">{{ messages[0] }}</div>
             {% endif %}
         {% endwith %}
-
-        <div class="text-center">
-
-        </div>
 
         <form action="/register" method="POST">
             <div class="mb-3">
@@ -83,6 +85,10 @@
                     <option value="Staff" selected>Staff</option>
                 </select>
             </div>
+
+            <!-- Hidden input for storing photo data -->
+            <input type="hidden" name="photo" id="photo">
+
             <div class="reg">
                 <button type="submit" class="btn btn-success w-100">Register</button>
             </div>
@@ -97,7 +103,6 @@
             <video id="webcam" width="200" height="150" autoplay></video>
             <canvas id="canvas" width="200" height="150" style="display: none;"></canvas>
             <button type="button" onclick="captureImage()">Capture Image</button>
-            <input type="hidden" name="photo" id="photo">
         </div>
 
         <div class="capture">

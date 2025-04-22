@@ -302,7 +302,7 @@
         contentType: 'application/json',
         data: JSON.stringify(returnData),
         success: function (response) {
-          alert(response.message || 'Book returned successfully.');
+          alert(response.message || 'Book returned successfully.An email notification was sent to the reader');
           $('#returnModal').hide();
           fetchData();
 

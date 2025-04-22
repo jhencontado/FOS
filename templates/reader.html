@@ -7,7 +7,7 @@
 
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-     <script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
+
     <style>
 
         .reader-modal {
@@ -144,7 +144,7 @@
                 <td>{{ reader.reference_id }}</td>
                 <td>{{ reader.address }}</td>
                 <td>{{ reader.email }}</td>
-                <td>{{ reader.lend_book }}</td>
+                 <td>{{ reader.lend_book or 0 }}</td>
                 <td>{{ reader.status }}</td>
                 <td>
                     <button class="edit-btn" data-reader='{{ reader|tojson }}'><i class="fas fa-edit"></i></button>
@@ -213,7 +213,7 @@
     </div>
 </DIV>
 </div>
-<script src="{{ url_for('static', filename='js/reader.js') }}"></script>
+
 <script>
  // Open Register Reader Modal
 document.getElementById("registerReaderBtn").onclick = function () {
@@ -244,11 +244,33 @@ function capturePhoto() {
     const canvas = document.getElementById("canvas");
     const context = canvas.getContext("2d");
 
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    context.drawImage(video, 0, 0);
+    // Set a fixed size for the image (e.g., 640x480)
+    const MAX_WIDTH = 640;
+    const MAX_HEIGHT = 480;
 
-    const dataURL = canvas.toDataURL("image/png");
+    const width = video.videoWidth;
+    const height = video.videoHeight;
+
+    // Scale the image down if it's larger than the max size
+    const scale = Math.min(MAX_WIDTH / width, MAX_HEIGHT / height);
+    const newWidth = width * scale;
+    const newHeight = height * scale;
+
+    canvas.width = newWidth;
+    canvas.height = newHeight;
+
+    context.drawImage(video, 0, 0, newWidth, newHeight);
+
+    const dataURL = canvas.toDataURL("image/jpeg", 0.6); // quality from 0 to 1
+
+    // Check image size before sending (e.g., 1 MB limit)
+    const MAX_SIZE = 1 * 1024 * 1024;  // 1 MB limit
+
+    if (dataURL.length > MAX_SIZE) {
+        alert("The photo is too large. Please capture a smaller photo.");
+        return;
+    }
+
     document.getElementById("photo").value = dataURL;
     document.getElementById("capturedImage").src = dataURL;
     document.getElementById("capturedImage").style.display = "block";
@@ -275,33 +297,72 @@ window.onclick = function (e) {
     if (e.target === document.getElementById("readerModal")) closeRegisterModal();
     if (e.target === document.getElementById("editModal")) closeEditModal();
 };
-
-// Search Reader
 function searchReader() {
-    const query = document.getElementById("searchQuery").value;
-    fetch(`/readers?search=${query}`)
+    const inputEl = document.getElementById("searchQuery");
+    if (!inputEl) {
+        console.warn("searchQuery element not found.");
+        return;
+    }
+
+    const query = inputEl.value.trim();
+    const url = query ? `/readers?search=${encodeURIComponent(query)}` : `/readers`;
+
+    fetch(url)
         .then(response => response.json())
         .then(data => {
             const tableBody = document.getElementById("readerTableBody");
-            tableBody.innerHTML = '';
+            tableBody.innerHTML = ''; // Clear old table
+
+            if (!data.readers || data.readers.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="10" style="text-align: center;">No Reader Found. Please Register.</td></tr>';
+                return;
+            }
+
             data.readers.forEach(reader => {
-                const row = `<tr>
+                const row = document.createElement('tr');
+                row.innerHTML = `
                     <td>${reader.reader_id}</td>
                     <td>${reader.name}</td>
                     <td>${reader.contact_number}</td>
                     <td>${reader.reference_id}</td>
                     <td>${reader.address}</td>
                     <td>${reader.email}</td>
-                    <td>${reader.lend_book}</td>
+                    <td>${reader.lend_book || 0}</td>
                     <td>${reader.status}</td>
                     <td>
-                        <button class="edit-btn" data-reader='${JSON.stringify(reader)}'><i class="fas fa-edit"></i></button>
-                        <button class="delete-btn" onclick="deleteReader(${reader.reader_id})"><i class="fas fa-trash"></i></button>
+                        <button class="edit-btn" data-reader='${JSON.stringify(reader)}'>
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="delete-btn" data-id="${reader.reader_id}">
+                            <i class="fas fa-trash"></i>
+                        </button>
                     </td>
-                </tr>`;
-                tableBody.innerHTML += row;
+                `;
+                tableBody.appendChild(row);
             });
-        });
+
+            // Reattach edit and delete event handlers
+            document.querySelectorAll(".edit-btn").forEach(btn => {
+                btn.onclick = () => {
+                    const data = JSON.parse(btn.dataset.reader);
+                    document.getElementById("editReaderId").value = data.reader_id;
+                    document.getElementById("editName").value = data.name;
+                    document.getElementById("editContactNumber").value = data.contact_number;
+                    document.getElementById("editReferenceId").value = data.reference_id;
+                    document.getElementById("editAddress").value = data.address;
+                    document.getElementById("editEmail").value = data.email;
+                    document.getElementById("editModal").style.display = "flex";
+                };
+            });
+
+            document.querySelectorAll(".delete-btn").forEach(btn => {
+                btn.onclick = () => {
+                    const id = btn.dataset.id;
+                    deleteReader(id);
+                };
+            });
+        })
+        .catch(error => console.error("Error loading readers:", error));
 }
 
 // Add Reader (AJAX)
@@ -312,13 +373,21 @@ document.getElementById("registerReaderForm").addEventListener("submit", functio
         method: 'POST',
         body: formData
     })
-    .then(response => response.json())
-    .then(data => {
-        alert(data.message);
-        closeRegisterModal();
-        searchReader();  // Refresh the reader list
+    .then(response => {
+        if (!response.ok) throw new Error("Server error: " + response. status);
+        return response.json();
     })
-    .catch(error => alert("Error: " + error));
+    .then(data => {
+        if (data.error) {
+            alert("Error: " + data.error);
+        } else {
+            alert(data.message);
+            closeRegisterModal();
+            searchReader(); // Refresh
+        }
+    })
+    .catch(error => alert("Error: " + error.message));
+
 });
 
 // Delete Reader (AJAX)
@@ -352,6 +421,16 @@ document.getElementById("editReaderForm").addEventListener("submit", function (e
     })
     .catch(error => alert("Error: " + error));
 });
+
+   // Close modals when clicked outside
+    window.onclick = function (e) {
+        if (e.target === document.getElementById("readerModal")) closeRegisterModal();
+        if (e.target === document.getElementById("editModal")) closeEditModal();
+    };
+
+    // Initial table load
+    document.addEventListener("DOMContentLoaded", searchReader);
+
 
 </script>
 

@@ -2,17 +2,20 @@ import base64
 import datetime
 import os
 import time
+
 from datetime import datetime
 
 import MySQLdb.cursors
-# import app
-from flask import Flask, render_template, jsonify, request, redirect, url_for, flash, session
+from flask import Flask, render_template, jsonify, request, redirect, url_for, flash, session, current_app
+
 from flask_mysqldb import MySQL
 from werkzeug.utils import secure_filename
 from flask_mail import Mail, Message
 import threading
+from flask_cors import CORS
 
 app = Flask(__name__, static_folder='static')
+CORS(app)
 
 
 app.config['SECRET_KEY'] = os.urandom(24)
@@ -33,15 +36,15 @@ app.config['MAIL_PASSWORD'] = 'iacv uvqd brme akst'
 app.config['MAIL_DEFAULT_SENDER'] = 'booklight019@gmail.com'
 mail = Mail(app)
 
-
-
-# File Upload Configuration
+app.config['MAX_CONTENT_LENGTH'] = 3 * 1024 * 1024  # 3MB, adjust as needed
+# Set upload folder
 app.config["UPLOAD_FOLDER"] = os.path.join("static", "uploads")
+
 os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 
 
 mysql = MySQL(app)
-
+now = datetime.now()
 
 @app.route('/home')
 def home():
@@ -50,33 +53,46 @@ def home():
 def index():
     return render_template('index.html')
 
+
+# Example route for registration
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
         name = request.form['name']
         contact_number = request.form['contact_number']
         username = request.form['username']
-        password = request.form['password']  # Store as plain text
+        password = request.form['password']  # Store as plain text (for demo purposes, use hashed password in real apps)
         email = request.form['email']
         role = request.form['role']
 
-        # Process photo
+        # Process the photo
         photo_data = request.form.get("photo", "")
         if photo_data:
-            photo_data = photo_data.replace("data:image/png;base64,", "")
-            photo_bytes = base64.b64decode(photo_data)
-            photo_filename = secure_filename(f"{username}.png")
-            photo_path = os.path.join(app.config["UPLOAD_FOLDER"], photo_filename)
+            try:
+                # Clean and decode the base64 image data
+                photo_data = photo_data.replace("data:image/png;base64,", "")
+                photo_bytes = base64.b64decode(photo_data)
 
-            with open(photo_path, "wb") as f:
-                f.write(photo_bytes)
+                # Create a secure filename
+                photo_filename = secure_filename(f"{username}.png")
+                photo_path = os.path.join(app.config["UPLOAD_FOLDER"], photo_filename)
+
+                # Save the photo to the specified folder
+                with open(photo_path, "wb") as f:
+                    f.write(photo_bytes)
+
+                print(f"Photo saved to: {photo_path}")  # Log the file path
+
+            except Exception as e:
+                print(f"Error processing photo: {e}")
+                photo_filename = "default.png"  # Fallback image in case of error
         else:
-            photo_filename = "default.png"  # Fallback image if no photo is taken
+            photo_filename = "default.png"  # Fallback if no photo is provided
 
-
+        # Save the user data and photo filename into the database (pseudo code)
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
         cursor.execute(
-            'INSERT INTO admin (name, contact_number, username, password, email, role,photo) VALUES (%s,%s, %s, %s, %s, %s, %s)',
+            'INSERT INTO admin (name, contact_number, username, password, email, role, photo) VALUES (%s, %s, %s, %s, %s, %s, %s)',
             (name, contact_number, username, password, email, role, photo_filename)
         )
         mysql.connection.commit()
@@ -108,6 +124,7 @@ def login():
             return redirect(url_for('dashboard'))
         else:
             flash("Invalid username or password!", "danger")
+            return redirect(url_for('login'))  # ✅ Redirect instead of render
 
     return render_template('index.html')
 
@@ -394,49 +411,91 @@ def delete_book(book_id):
 
     return jsonify({"message": "Book deleted successfully!"})
 
-
 @app.route('/readers', methods=['GET'])
 def readers():
-    search_query = request.args.get('search', '')
+    search_query = request.args.get('search', '').strip()
     cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
-    if search_query:
-        query = """
-        SELECT * FROM reader
-        WHERE name LIKE %s OR contact_number LIKE %s OR reference_id LIKE %s
-        """
-        cursor.execute(query, (f"%{search_query}%", f"%{search_query}%", f"%{search_query}%"))
-    else:
-        query = "SELECT * FROM reader"
-        cursor.execute(query)
+    base_query = """
+    SELECT 
+        r.reader_id,
+        r.name,
+        r.contact_number,
+        r.reference_id,
+        r.address,
+        r.email,
+        r.status,
+        COUNT(i.issued_number) AS lend_book
+    FROM reader r
+    LEFT JOIN issued i ON r.reader_id = i.reader_id
+    LEFT JOIN return_book rb ON i.issued_number = rb.issued_number
+    WHERE rb.issued_number IS NULL
+    """
+    filters = []
+    params = []
 
+    if search_query:
+        filters.append("(r.name LIKE %s OR r.contact_number LIKE %s OR r.reference_id LIKE %s)")
+        params.extend([f"%{search_query}%"] * 3)
+
+    if filters:
+        base_query += " AND " + " AND ".join(filters)
+
+    base_query += " GROUP BY r.reader_id"
+
+    cursor.execute(base_query, tuple(params))
     readers = cursor.fetchall()
     cursor.close()
 
+    # If it's an AJAX request or a search, return JSON
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or search_query:
+        return jsonify(readers=readers)
+
     return render_template('reader.html', readers=readers)
 
-@app.route('/readers')
-def manage_readers():
+
+
+def update_reader_lend_status():
     cursor = mysql.connection.cursor()
 
-    query = """
-    SELECT r.*, 
-        (
-            SELECT COUNT(*) 
+    # Update readers who still have unreturned books
+    cursor.execute("""
+        UPDATE reader r
+        JOIN (
+            SELECT i.reader_id, COUNT(*) AS lent_count
             FROM issued i
-            WHERE i.reader_id = r.reader_id
-              AND i.issued_number NOT IN (
-                  SELECT issued_number FROM return_book
-              )
-        ) AS lend_book
-    FROM reader r
-    """
+            LEFT JOIN return_book rb ON i.issued_number = rb.issued_number
+            WHERE rb.issued_number IS NULL
+            GROUP BY i.reader_id
+        ) i ON r.reader_id = i.reader_id
+        SET 
+            r.lend_book = i.lent_count,
+            r.status = CASE 
+                         WHEN i.lent_count >= 5 THEN 'inactive' 
+                         ELSE 'active'
+                       END
+    """)
 
-    cursor.execute(query)
-    readers = cursor.fetchall()
+    # Reset readers who have returned all books
+    cursor.execute("""
+        UPDATE reader
+        SET lend_book = 0, status = 'active'
+        WHERE reader_id NOT IN (
+            SELECT reader_id FROM issued
+            WHERE issued_number NOT IN (
+                SELECT issued_number FROM return_book
+            )
+        )
+    """)
+
+    mysql.connection.commit()
     cursor.close()
-    return render_template('reader.html', readers=readers)
 
+
+# Handle large requests (413 Error Handling)
+@app.errorhandler(413)
+def request_entity_too_large(error):
+    return jsonify({"error": "File is too large. Please upload a smaller file."}), 413
 
 @app.route('/add_reader', methods=['POST'])
 def add_reader():
@@ -448,16 +507,23 @@ def add_reader():
         email = request.form['email']
         photo_data = request.form['photo']  # Base64 image data
 
-        # Convert Base64 to an image file
+        # Check if photo data is available and validate its size
         if photo_data:
-            photo_filename = f"{name.replace(' ', '_')}_{int(datetime.timestamp(datetime.now()))}.png"
+            # Check the size of the base64 image data (1 MB max here)
+            max_size = 1 * 1024 * 1024  # 1 MB limit for image
+            if len(photo_data) > max_size:
+                return jsonify({"error": "The photo is too large. Please capture a smaller photo."}), 413
+
+            # Convert Base64 to an image file
+            photo_filename = f"{name.replace(' ', '_')}.png"
             photo_path = os.path.join(app.config["UPLOAD_FOLDER"], photo_filename)
 
-            # Save the image
+            # Save the image as a file in the upload folder
             with open(photo_path, "wb") as fh:
                 fh.write(base64.b64decode(photo_data.split(",")[1]))
 
         else:
+            # Use a default image if no photo is uploaded
             photo_filename = "default.png"
 
         # Insert into database
@@ -472,8 +538,12 @@ def add_reader():
 
         return jsonify({"message": "Reader registered successfully!"})
 
+
     except Exception as e:
-        return jsonify({"error": str(e)})
+
+        print(f"Error registering reader: {e}")  # Optional logging
+
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route('/delete_reader/<int:reader_id>', methods=['POST'])
@@ -522,11 +592,8 @@ def update_reader():
 
         # Success response
         return jsonify({"message": "Reader updated successfully!"})
-
     except Exception as e:
-        # Error handling
         return jsonify({"error": str(e)}), 500
-
 
 @app.route('/get_reader/<int:reader_id>')
 def get_reader(reader_id):
@@ -547,23 +614,29 @@ def deactivate_reader(reader_id):
 @app.route('/issue', methods=['GET'])
 def issue_page():
     return render_template('issue.html')
-
 @app.route('/search_reader', methods=['GET'])
 def search_reader():
     query = request.args.get('query', '')
     if query:
         try:
-            # Search for readers by name or ID
             cursor = mysql.connection.cursor()
+            # Use subquery to count only books that are NOT returned
             cursor.execute("""
-                SELECT reader_id, name, email, contact_number, status, lend_book
-                FROM reader
-                WHERE name LIKE %s OR reader_id LIKE %s
-            """, (f"%{query}%", f"%{query}%"))
+                           SELECT 
+                               r.reader_id, r.name, r.email, r.contact_number, r.status,
+                               (
+                                   SELECT COUNT(*) FROM issued i
+                                   LEFT JOIN return_book rb ON i.issued_number = rb.issued_number
+                                   WHERE i.reader_id = r.reader_id AND rb.issued_number IS NULL
+                               ) AS lend_book
+                           FROM reader r
+                           WHERE r.name LIKE %s OR r.reader_id LIKE %s
+                       """, (f"%{query}%", f"%{query}%"))
+
             readers = cursor.fetchall()
             cursor.close()
 
-            # Return a properly formatted JSON response
+            # Format result into JSON
             reader_data = []
             for reader in readers:
                 reader_data.append({
@@ -577,10 +650,9 @@ def search_reader():
 
             return jsonify(reader_data)
         except Exception as e:
-            # Log the exception for debugging purposes
             print(f"Error during reader search: {e}")
             return jsonify({'error': 'An error occurred while fetching reader data'}), 500
-    return jsonify([])  # Return an empty list if no query is provided
+    return jsonify([])
 
 @app.route('/fetch_books', methods=['GET'])
 def fetch_books():
@@ -652,22 +724,7 @@ def issue_books():
         issued_number = cur.lastrowid
         issued_numbers.append(issued_number)
 
-        # Reduce book quantity
-        cur.execute("UPDATE book SET available_qnty = available_qnty - 1 WHERE book_id = %s AND available_qnty > 0",
-                    (book_id,))
-
-        # Increment the lend_book field for the reader
-        cur.execute("UPDATE reader SET lend_book = lend_book + 1 WHERE reader_id = %s", (reader_id,))
-
-    # Check if the updated lend_book count is greater than or equal to 5
-    cur.execute("SELECT lend_book FROM reader WHERE reader_id = %s", (reader_id,))
-    lend_book_count = cur.fetchone()[0]  # Get the updated lend_book count
-
-    if lend_book_count >= 5:
-        # If the reader has borrowed 5 or more books, set status to 'inactive'
-        cur.execute("UPDATE reader SET status = 'inactive' WHERE reader_id = %s", (reader_id,))
-        mysql.connection.commit()
-        print(f"Reader ID {reader_id} status updated to inactive")
+        update_reader_lend_status()
 
     # Fine logic: Check if the return date is overdue
     from datetime import datetime
@@ -789,105 +846,6 @@ def send_issue_email(reader_email, reader_name, book_titles, return_date):
     app = current_app._get_current_object()
     threading.Thread(target=send_async_email, args=(app, msg)).start()
 
-def send_return_email(reader_email, reader_name, book_titles, return_date, fine_amount=0):
-    from flask_mail import Message
-    from flask import current_app
-
-    book_list_html = ''.join(f"<li>{title}</li>" for title in book_titles)
-    msg = Message(
-        subject="📥 Book Returned - BookLight Confirmation",
-        sender="booklight019@gmail.com",  # Use your Gmail sender
-        recipients=[reader_email]
-    )
-
-    fine_message = ""
-    if fine_amount > 0:
-        fine_message = f"<p><strong>Note:</strong> You have an unpaid fine of <strong>₱{fine_amount:.2f}</strong>.</p>"
-
-    msg.html = f"""
-        <h3>Hello {reader_name},</h3>
-        <p>This is a confirmation that the following books have been returned to BookLight:</p>
-        <ul>{book_list_html}</ul>
-        <p><strong>Return Date:</strong> {return_date}</p>
-        {fine_message}
-        <br>
-        <p>Thank you for using BookLight Library. We hope to see you again soon!</p>
-        <br>
-        <p>Best regards,<br>📘 BookLight Library Team</p>
-    """
-
-    app = current_app._get_current_object()
-    threading.Thread(target=send_async_email, args=(app, msg)).start()
-
-
-
-
-@app.route('/send_due_emails', methods=['POST'])
-def send_due_emails():
-    today = datetime.date.today()
-    cur = mysql.connection.cursor()
-
-    cur.execute("""
-        SELECT r.reader_id, r.name, r.email, i.return_date, b.title
-        FROM issued i
-        JOIN reader r ON r.reader_id = i.reader_id
-        JOIN book b ON b.book_id = i.book_id
-        WHERE i.return_date = %s
-    """, (today,))
-
-    results = cur.fetchall()
-
-    if not results:
-        return jsonify(success=False, message="📭 No due books today.")
-
-    # Group books by reader
-    readers = {}
-    for row in results:
-        reader_id, name, email, return_date, title = row
-        if reader_id not in readers:
-            readers[reader_id] = {
-                "name": name,
-                "email": email,
-                "due_date": return_date,
-                "books": []
-            }
-        readers[reader_id]["books"].append(title)
-
-    # Send email to each reader
-    for data in readers.values():
-        send_due_reminder_email(
-            reader_email=data["email"],
-            reader_name=data["name"],
-            book_titles=data["books"],
-            due_date=data["due_date"]
-        )
-
-    return jsonify(success=True, message="✅ Due date reminder emails sent.")
-
-
-def send_due_reminder_email(reader_email, reader_name, book_titles, due_date):
-    from flask_mail import Message
-    from flask import current_app
-    import threading
-
-    book_list_html = ''.join(f"<li>{title}</li>" for title in book_titles)
-    msg = Message(
-        subject="⏰ Book Due Reminder - BookLight",
-        sender="booklight019@gmail.com",
-        recipients=[reader_email]
-    )
-
-    msg.html = f"""
-        <h3>Hello {reader_name},</h3>
-        <p>This is a reminder that the following books are due on <strong>{due_date}</strong>:</p>
-        <ul>{book_list_html}</ul>
-        <p>Please return them on or before the due date to avoid any penalties.</p>
-        <br>
-        <p>Best regards,<br>📘 BookLight Library Team</p>
-    """
-
-    app = current_app._get_current_object()
-    threading.Thread(target=send_async_email, args=(app, msg)).start()
 
 
 
@@ -897,6 +855,7 @@ def receipt():
     if not receipt_data:
         return "No receipt data available", 400
     return render_template('receipt.html', receipt=receipt_data)
+
 
 
 @app.route('/get_logged_in_admin', methods=['GET'])
@@ -974,7 +933,6 @@ def fetch_book_price():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-
 @app.route('/fetch_issued', methods=['GET'])
 def fetch_issued():
     search_query = request.args.get('search', '')
@@ -983,11 +941,22 @@ def fetch_issued():
 
     cur = mysql.connection.cursor()
 
-    base_query = """
-        SELECT issued.issued_number, issued.reader_id, reader.name, issued.book_id, 
-               book.title, issued.start_date, issued.return_date, issued.transaction_id,
-               reader.status,
-               (SELECT COUNT(*) FROM issued i2 WHERE i2.reader_id = issued.reader_id) AS total_borrowed
+    query = f"""
+        SELECT 
+            issued.issued_number, issued.reader_id, reader.name, issued.book_id, 
+            book.title, issued.start_date, issued.return_date, issued.transaction_id,
+            reader.status,
+            (
+                SELECT COUNT(*) 
+                FROM issued AS i2 
+                WHERE i2.reader_id = issued.reader_id
+                AND NOT EXISTS (
+                    SELECT 1 
+                    FROM return_book rb2 
+                    WHERE rb2.issued_number = i2.issued_number
+                )
+            ) AS total_borrowed,
+            issued.email_sent
         FROM issued
         JOIN reader ON issued.reader_id = reader.reader_id
         JOIN book ON issued.book_id = book.book_id
@@ -999,30 +968,41 @@ def fetch_issued():
         )
     """
 
-    # Append conditions for filters
+    # Append optional conditions
     conditions = []
     if filter_overdue:
         conditions.append("issued.return_date < CURDATE()")
     if filter_exceed_lent:
-        conditions.append("reader.status = 'inactive'")
+        conditions.append("""
+            (
+                SELECT COUNT(*) 
+                FROM issued i2 
+                WHERE i2.reader_id = issued.reader_id
+                AND NOT EXISTS (
+                    SELECT 1 
+                    FROM return_book rb2 
+                    WHERE rb2.issued_number = i2.issued_number
+                )
+            ) >= 5
+        """)
 
     if conditions:
-        base_query += " AND " + " AND ".join(conditions)
+        query += " AND " + " AND ".join(conditions)
 
-    base_query += " ORDER BY issued.issued_number DESC"
+    query += " ORDER BY issued.issued_number DESC"
 
     try:
-        cur.execute(base_query, (f"%{search_query}%", f"%{search_query}%"))
+        cur.execute(query, (f"%{search_query}%", f"%{search_query}%"))
         issued_books = cur.fetchall()
         if not issued_books:
-            return jsonify({"message": "No records found matching the search criteria."}), 404
+            return jsonify([])  # return empty list instead of 404 for frontend ease
     except Exception as e:
         print(f"Error fetching issued books: {e}")
         return jsonify({"error": "An error occurred while fetching issued books."}), 500
     finally:
         cur.close()
 
-    # Return as JSON
+    # Build JSON response
     issued_books_list = [
         {
             "issued_number": row[0],
@@ -1034,7 +1014,8 @@ def fetch_issued():
             "return_date": row[6].strftime('%Y-%m-%d'),
             "transaction_id": row[7],
             "status": row[8],
-            "total_borrowed": row[9]
+            "total_borrowed": row[9],
+            "email_sent": bool(row[10])
         }
         for row in issued_books
     ]
@@ -1149,9 +1130,9 @@ def process_return():
         data = request.get_json()
         issued_number = data.get('issued_number')
         book_condition = data.get('book_condition', 'good')  # Default to 'good'
-        fine_type = data.get('fine_type', 'overdue')  # Default to 'overdue'
+        fine_type = data.get('fine_type') or 'overdue'  # Default to 'overdue'
         fine_amount = float(data.get('fine_amount', 0.00))  # Default to 0.00
-        fine_status = data.get('fine_status', 'unpaid')  # Default to 'unpaid'
+        fine_status = data.get('fine_status') or 'unpaid'  # Default to 'unpaid'
 
         # Ensure the admin is logged in (using session)
         admin_id = session.get('admin_id')
@@ -1227,10 +1208,14 @@ def process_return():
         # Commit changes to the database
         mysql.connection.commit()
 
-        # Fetch reader and book details for the receipt
-        cur.execute("SELECT name FROM reader WHERE reader_id = %s", (reader_id,))
+        # Fetch names and contact/email
+        cur.execute("SELECT name, contact_number, email FROM reader WHERE reader_id = %s", (reader_id,))
         reader_data = cur.fetchone()
         reader_name = reader_data[0] if reader_data else "Unknown"
+        reader_contact = reader_data[1] if reader_data else "Unknown"
+        reader_email = reader_data[2] if reader_data else None
+
+
 
         cur.execute("SELECT title FROM book WHERE book_id = %s", (book_id,))
         book_data = cur.fetchone()
@@ -1273,6 +1258,18 @@ def process_return():
             }
         }
 
+        # Send return confirmation email
+        if reader_email:
+            send_return_email(
+                reader_email=reader_email,
+                reader_name=reader_name,
+                book_title=book_title,
+                return_date=today_date.strftime('%Y-%m-%d'),
+                fine_amount=fine,
+                fine_type=fine_type,
+                fine_status=fine_status
+            )
+
         # Optional: return JSON to trigger frontend opening return_receipt
         return jsonify({
             "receipt_url": "/return_receipt",
@@ -1287,6 +1284,34 @@ def process_return():
 
         return jsonify({'error': 'An error occurred: ' + str(e)}), 500
 
+def send_return_email(reader_email, reader_name, book_title, return_date, fine_amount, fine_type, fine_status):
+    from flask_mail import Message
+    from flask import current_app
+
+    msg = Message(
+        subject="✅ Book Returned - BookLight Confirmation",
+        sender="booklight019@gmail.com",
+        recipients=[reader_email]
+    )
+    msg.html = f"""
+        <h3>Hello {reader_name},</h3>
+        <p>Thank you for returning the book:</p>
+        <ul><li><strong>{book_title}</strong></li></ul>
+        <p><strong>Return Date:</strong> {return_date}</p>
+        <p><strong>Fine Details:</strong></p>
+        <ul>
+            <li>Type: {fine_type.capitalize()}</li>
+           <li>Type: {(fine_type or 'None').capitalize()}</li>
+            <li>Status: {(fine_status or 'None').capitalize()}</li>
+
+        </ul>
+        <p>If you have any concerns about this transaction, feel free to contact us.</p>
+        <br>
+        <p>Warm regards,<br>📘 BookLight Library Team</p>
+    """
+
+    app = current_app._get_current_object()
+    threading.Thread(target=send_async_email, args=(app, msg)).start()
 
 
 @app.route('/return_receipt')
@@ -1296,20 +1321,129 @@ def return_receipt():
         return "No return receipt data available", 400  # Return an error if no data found
     return render_template('return_receipt.html', receipt=receipt_data)  # Pass the data to the template
 
+
+
+
+
+# Function to build the email content
+def build_email_content(name, books_info):
+    book_items = ''
+    for book in books_info:
+        title = book['title']
+        overdue_days = book['overdue_days']
+        fine = book['fine']
+        overdue_message = f"Overdue by {overdue_days} days" if overdue_days > 0 else "Due Today"
+        fine_message = f"Fine: ₱{fine}" if fine > 0 else "No fine"
+
+        book_items += f"""
+            <li>
+                <strong>{title}</strong><br>
+                {overdue_message}<br>
+                {fine_message}
+            </li>
+        """
+
+    return f"""
+        <h3>Hi {name},</h3>
+        <p>You have borrowed the following books from <strong>BookLight</strong>:</p>
+        <ul>{book_items}</ul>
+        <p>📘 BookLight Library Team</p>
+    """
+
+@app.route('/reminder/send_bulk_reminders', methods=['POST'])
+def send_bulk_reminders():
+    """Sends reminder emails to readers who have overdue books or have borrowed 5+ books."""
+    cur = mysql.connection.cursor()
+
+    # Fetch all issued books where email_sent is FALSE
+    cur.execute("""
+        SELECT 
+            i.issued_number,
+            i.reader_id,
+            r.name,
+            r.email,
+            b.title,
+            i.return_date,
+            DATEDIFF(CURDATE(), i.return_date) AS overdue_days
+        FROM issued i
+        JOIN reader r ON i.reader_id = r.reader_id
+        JOIN book b ON b.book_id = i.book_id
+        WHERE i.email_sent = FALSE
+    """)
+    results = cur.fetchall()
+
+    if not results:
+        cur.close()
+        return jsonify({"status": "No readers to notify"}), 200
+
+    app = current_app._get_current_object()
+    readers_dict = {}
+
+    # Group issued books per reader
+    for issued_number, reader_id, name, email, title, return_date, overdue_days in results:
+        if not email:
+            continue
+
+        fine = max(0, overdue_days) * 50
+
+        if reader_id not in readers_dict:
+            readers_dict[reader_id] = {
+                "name": name,
+                "email": email,
+                "books": [],
+                "issued_numbers": []
+            }
+
+        readers_dict[reader_id]["books"].append({
+            "title": title,
+            "overdue_days": overdue_days,
+            "fine": fine
+        })
+        readers_dict[reader_id]["issued_numbers"].append(issued_number)
+
+    # Send email and update issued rows
+    for reader_id, info in readers_dict.items():
+        name = info["name"]
+        email = info["email"]
+        books_info = info["books"]
+        issued_numbers = info["issued_numbers"]
+
+        try:
+            msg = Message(
+                subject="⏰ Reminder - BookLight Library",
+                sender="booklight019@gmail.com",
+                recipients=[email]
+            )
+            msg.html = build_email_content(name, books_info)
+
+            threading.Thread(target=send_async_email, args=(app, msg)).start()
+
+            for issued_number in issued_numbers:
+                cur.execute("UPDATE issued SET email_sent = TRUE WHERE issued_number = %s", (issued_number,))
+
+            print(f"✅ Email queued for {name} ({email})")
+
+        except Exception as e:
+            print(f"❌ Failed to send email to {email}: {str(e)}")
+
+    mysql.connection.commit()
+    cur.close()
+
+    return jsonify({"status": "📬 Emails sent successfully"}), 200
+
+
 @app.route('/test_email')
 def test_email():
     try:
         msg = Message(
-            subject="📧 Test Email from BookLight",
-            recipients=['jbdianzon@gmail.com'],  # replace with your own email to test
-            body="This is a test email sent from Flask using Outlook SMTP.",
-            sender="booklight019@gmail.com"
+            subject="Test Email from BookLight 📬",
+            recipients=["jbdianzon@gmail.com"],  # replace with your own email
+            body="This is a test email from BookLight Library system."
         )
         mail.send(msg)
         return "✅ Test email sent!"
     except Exception as e:
-        return f"❌ Email failed: {e}"
-
+        return f"❌ Failed to send email: {str(e)}"
 
 
 if __name__ == '__main__':
