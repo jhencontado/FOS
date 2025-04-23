@@ -413,24 +413,23 @@ def delete_book(book_id):
 
 @app.route('/readers', methods=['GET'])
 def readers():
+    update_reader_lend_status()
     search_query = request.args.get('search', '').strip()
     cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
 
     base_query = """
-    SELECT 
-        r.reader_id,
-        r.name,
-        r.contact_number,
-        r.reference_id,
-        r.address,
-        r.email,
-        r.status,
-        COUNT(i.issued_number) AS lend_book
-    FROM reader r
-    LEFT JOIN issued i ON r.reader_id = i.reader_id
-    LEFT JOIN return_book rb ON i.issued_number = rb.issued_number
-    WHERE rb.issued_number IS NULL
-    """
+       SELECT 
+           r.reader_id,
+           r.name,
+           r.contact_number,
+           r.reference_id,
+           r.address,
+           r.email,
+           r.status,
+           r.lend_book
+       FROM reader r
+       WHERE 1=1
+       """
     filters = []
     params = []
 
@@ -1130,9 +1129,10 @@ def process_return():
         data = request.get_json()
         issued_number = data.get('issued_number')
         book_condition = data.get('book_condition', 'good')  # Default to 'good'
-        fine_type = data.get('fine_type') or 'overdue'  # Default to 'overdue'
-        fine_amount = float(data.get('fine_amount', 0.00))  # Default to 0.00
-        fine_status = data.get('fine_status') or 'unpaid'  # Default to 'unpaid'
+        raw_fine_type = data.get('fine_type', 'overdue')
+
+        # Normalize fine_type to valid values (None if invalid)
+        fine_type = None if raw_fine_type == 'none' else raw_fine_type
 
         # Ensure the admin is logged in (using session)
         admin_id = session.get('admin_id')
@@ -1160,27 +1160,26 @@ def process_return():
         # Calculate exceed days (if any)
         exceed_days = max(0, (today_date - return_date).days)
 
-        # Fine Calculation based on fine type
-        if fine_type == 'overdue':
-            fine = exceed_days * 50
-            print(f"Overdue fine calculated: {fine} for {exceed_days} exceed days.")  # Debugging line
-        elif fine_type == 'lost':
-            # Fetch book price for lost fine
-            cur.execute("SELECT book_amount FROM book WHERE book_id = %s", (book_id,))
-            book_data = cur.fetchone()
-            if book_data:
-                fine = book_data[0]  # Assuming book_amount is a field in book table
-                print(f"Lost fine calculated: {fine} from book price.")  # Debugging line
-            else:
-                fine = 0  # Default to 0 if book_amount not found
-                print("No book price found, fine set to 0.")  # Debugging line
-        elif fine_type == 'damaged':
-            fine = 100  # Fixed fine for damaged books
-            print(f"Damaged fine set: {fine}")  # Debugging line
+        # Fine Calculation
+        if fine_type not in ['overdue', 'lost', 'damaged']:
+            fine_type = None
+            fine = 0
+            print("No fine type matched, fine set to 0.")
         else:
-            fine = 0  # Default to 0 for other cases
-            print("No fine type matched, fine set to 0.")  # Debugging line
+            if fine_type == 'overdue':
+                fine = exceed_days * 50
+                print(f"Overdue fine calculated: {fine} for {exceed_days} exceed days.")
+            elif fine_type == 'lost':
+                cur.execute("SELECT book_amount FROM book WHERE book_id = %s", (book_id,))
+                book_data = cur.fetchone()
+                fine = book_data[0] if book_data else 0
+                print(f"Lost fine calculated: {fine} from book price.")
+            elif fine_type == 'damaged':
+                fine = 100
+                print(f"Damaged fine set: {fine}")
 
+        fine_amount = float(data.get('fine_amount', fine))  # Default to calculated fine
+        fine_status = data.get('fine_status') or 'unpaid'  # Default to 'unpaid'
         # Insert into return_book table
         cur.execute(""" 
             INSERT INTO return_book (issued_number, reader_id, book_id, return_date, book_condition, 
@@ -1215,24 +1214,15 @@ def process_return():
         reader_contact = reader_data[1] if reader_data else "Unknown"
         reader_email = reader_data[2] if reader_data else None
 
-
-
+        # Fetch book title
         cur.execute("SELECT title FROM book WHERE book_id = %s", (book_id,))
         book_data = cur.fetchone()
         book_title = book_data[0] if book_data else "Unknown"
-
 
         # Fetch admin name
         cur.execute("SELECT name FROM admin WHERE admin_id = %s", (admin_id,))
         admin_data = cur.fetchone()
         admin_name = admin_data[0] if admin_data else "Unknown"
-
-        # Fetch reader contact
-        cur.execute("SELECT contact_number FROM reader WHERE reader_id = %s", (reader_id,))
-        contact_data = cur.fetchone()
-        reader_contact = contact_data[0] if contact_data else "Unknown"
-
-
 
         # Store return receipt details in session after processing
         session['return_receipt_data'] = {
@@ -1252,24 +1242,24 @@ def process_return():
             },
             "return_date": return_date,
             "fine_details": {
-                "amount": fine,
+                "amount": fine_amount,
                 "type": fine_type,
                 "status": fine_status
             }
         }
 
-        # Send return confirmation email
+        # Send return confirmation email (only if email exists)
         if reader_email:
             send_return_email(
                 reader_email=reader_email,
                 reader_name=reader_name,
                 book_title=book_title,
                 return_date=today_date.strftime('%Y-%m-%d'),
-                fine_amount=fine,
+                fine_amount=fine_amount,
                 fine_type=fine_type,
                 fine_status=fine_status
             )
-
+        update_reader_lend_status()
         # Optional: return JSON to trigger frontend opening return_receipt
         return jsonify({
             "receipt_url": "/return_receipt",
@@ -1283,6 +1273,7 @@ def process_return():
         print(f"Error occurred during return processing: {str(e)}")  # Log the error
 
         return jsonify({'error': 'An error occurred: ' + str(e)}), 500
+
 
 def send_return_email(reader_email, reader_name, book_title, return_date, fine_amount, fine_type, fine_status):
     from flask_mail import Message
@@ -1300,10 +1291,9 @@ def send_return_email(reader_email, reader_name, book_title, return_date, fine_a
         <p><strong>Return Date:</strong> {return_date}</p>
         <p><strong>Fine Details:</strong></p>
         <ul>
-            <li>Type: {fine_type.capitalize()}</li>
-           <li>Type: {(fine_type or 'None').capitalize()}</li>
+            <li>Type: {(fine_type or 'None').capitalize()}</li>
+            <li>Amount: ₱{fine_amount:.2f}</li>
             <li>Status: {(fine_status or 'None').capitalize()}</li>
-
         </ul>
         <p>If you have any concerns about this transaction, feel free to contact us.</p>
         <br>

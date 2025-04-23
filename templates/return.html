@@ -280,9 +280,14 @@
       }
     }
 
-    // Form submit
+     // Form submit
     $('#returnForm').on('submit', function (e) {
       e.preventDefault();
+
+      let fineType = $('#fine_type').val();
+      if (fineType === 'none') {
+        fineType = null;
+      }
 
       const returnData = {
         issued_number: $('#issued_number').val(),
@@ -290,7 +295,7 @@
         book_id: $('#book_id').val(),
         return_date: $('#return_date').val(),
         book_condition: $('#book_condition').val(),
-        fine_type: $('#fine_type').val() || null,
+        fine_type: fineType,
         fine_amount: $('#fine_amount').val(),
         fine_status: $('#fine_status').val(),
         processed_by: $('#admin_id').val()
@@ -307,6 +312,7 @@
           fetchData();
 
           if (response.receipt && response.receipt.return_id) {
+            console.log(response.receipt.return_id);  // Check if this returns the correct receipt ID
             window.open('/return_receipt?return_id=' + response.receipt.return_id, '_blank');
           }
         },

@@ -144,7 +144,7 @@
                 <td>{{ reader.reference_id }}</td>
                 <td>{{ reader.address }}</td>
                 <td>{{ reader.email }}</td>
-                 <td>{{ reader.lend_book or 0 }}</td>
+                <td>{{ reader.lend_book if reader.lend_book is not none else 0 }}</td>
                 <td>{{ reader.status }}</td>
                 <td>
                     <button class="edit-btn" data-reader='{{ reader|tojson }}'><i class="fas fa-edit"></i></button>
@@ -327,7 +327,7 @@ function searchReader() {
                     <td>${reader.reference_id}</td>
                     <td>${reader.address}</td>
                     <td>${reader.email}</td>
-                    <td>${reader.lend_book || 0}</td>
+                    <td>${reader.lend_book == 0 ? "None" : reader.lend_book}</td>
                     <td>${reader.status}</td>
                     <td>
                         <button class="edit-btn" data-reader='${JSON.stringify(reader)}'>

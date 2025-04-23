@@ -241,8 +241,16 @@
                 dataType: 'json',
                 success: function (data) {
                     const readerList = $('#reader-list');
-                    readerList.empty().append('<option value="">Select Reader</option>');
+                    readerList.empty();
 
+                    if (data.length === 0) {
+                        readerList.append('<option value="">No record found, please register</option>');
+                        $('#reader-name, #reader-email, #reader-contact, #lendBookCount').val('');
+                        $('#checkout-btn').prop('disabled', true);
+                        return;
+                    }
+
+                    readerList.append('<option value="">Select Reader</option>');
                     data.forEach(reader => {
                         readerList.append(`
                             <option value="${reader.reader_id}"
@@ -258,7 +266,6 @@
                 }
             });
         });
-
         $('#reader-list').change(function () {
             let selected = $(this).find(':selected');
             $('#reader-name').val(selected.data('name') || '');
@@ -290,6 +297,15 @@
             const bookList = $('#book-list');
             bookList.empty();
 
+            if (books.length === 0) {
+                bookList.append(`
+                    <div class="no-book-message text-center text-muted" style="margin-top: 20px;">
+                        📚 Book not available
+                    </div>
+                `);
+                return;
+            }
+
             books.forEach(book => {
                 const imageUrl = book.image && book.image.trim() !== ''
                     ? `/static/image/${book.image}`
@@ -306,6 +322,7 @@
                 `);
             });
         }
+
 
         $('#search-title').on('input', function () {
             const query = $(this).val().toLowerCase().trim();
